@@ -1,5 +1,6 @@
 # files
 files/
+logs/
 
 # Python
 __pycache__/

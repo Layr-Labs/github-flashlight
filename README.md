@@ -1,10 +1,10 @@
-# Code Analysis Agent
+# GitHub Flashlight
 
-A sophisticated codebase analysis agent using the Claude Agent SDK that performs dependency-aware analysis through multi-agent composition.
+A sophisticated multi-agent processing pipeline using the Claude Agent SDK that performs dependency-aware codebase analysis and visualization through multi-agent composition.
 
 ## Features
 
-- **Automatic Service Discovery**: Identifies services in Rust (Cargo.toml), Node.js (package.json), and Python (pyproject.toml) codebases
+- **Automatic Service Discovery**: Identifies services in Rust (Cargo.toml), Go (go.mod), Node.js (package.json), and Python (pyproject.toml) codebases
 - **Dependency Graph Analysis**: Builds and visualizes service dependency relationships
 - **Two-Phase Analysis**:
   - Phase 1: Analyzes foundation services with no dependencies
@@ -16,7 +16,7 @@ A sophisticated codebase analysis agent using the Claude Agent SDK that performs
 
 ## Architecture
 
-The agent uses four specialized roles:
+The pipeline uses four specialized roles:
 
 1. **Primary Leader** (orchestrator)
    - Discovers services by scanning for manifest files
@@ -60,20 +60,20 @@ cp .env.example .env
 ## Usage
 
 ```bash
-# Run the agent
-python -m code_analysis_agent.agent
+# Run the pipeline
+python -m github_flashlight.agent
 
 # Or use the installed command
-code-analysis-agent
+github-flashlight
 ```
 
 Then provide a path to analyze:
 ```
-You: Analyze the Rust codebase at /path/to/repo
+You: Analyze the codebase at /path/to/repo
 ```
 
-The agent will:
-1. Scan for services (Cargo.toml files)
+The pipeline will:
+1. Scan for services (Cargo.toml, go.mod, package.json, pyproject.toml files)
 2. Build dependency graph
 3. Analyze services in two phases:
    - Phase 1: Services with no dependencies (parallel)
@@ -159,6 +159,7 @@ The agent will:
 ## Supported Languages
 
 - **Rust**: Full support (Cargo.toml discovery, dependency extraction)
+- **Go**: Full support (go.mod discovery, dependency extraction)
 - **Node.js**: Partial support (package.json discovery)
 - **Python**: Partial support (pyproject.toml discovery)
 
@@ -180,10 +181,10 @@ pytest
 
 ## How It Works
 
-The lead agent uses a sophisticated multi-phase workflow:
+The primary leader orchestrates a sophisticated multi-phase workflow:
 
 ### Discovery Phase
-- Uses Glob to find manifest files (Cargo.toml, package.json, pyproject.toml)
+- Uses Glob to find manifest files (Cargo.toml, go.mod, package.json, pyproject.toml)
 - Reads each manifest to extract service metadata
 - Identifies internal dependencies (path-based in manifests)
 - Saves service inventory to JSON
@@ -268,12 +269,12 @@ The generated React SPA provides an intuitive interface for exploring the codeba
 
 ## Contributing
 
-This is a demo project showcasing the Claude Agent SDK's multi-agent composition capabilities. Feel free to extend it with:
-- Additional language support
-- Visual dependency graphs (using graphviz)
-- Metrics collection (LOC, complexity)
-- Incremental analysis
+This project showcases the Claude Agent SDK's multi-agent composition capabilities. Feel free to extend it with:
+- Additional language support (Java, C#, etc.)
+- Enhanced metrics collection (LOC, complexity, test coverage)
+- Incremental analysis for large repositories
 - Custom analysis plugins
+- Additional visualization options
 
 ## License
 
