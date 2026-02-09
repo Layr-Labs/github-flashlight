@@ -6,9 +6,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions, AgentDefinition, HookMatcher
 
-from code_analysis_agent.utils.subagent_tracker import SubagentTracker
-from code_analysis_agent.utils.transcript import setup_session, TranscriptWriter
-from code_analysis_agent.utils.message_handler import process_assistant_message
+from agent.utils.subagent_tracker import SubagentTracker
+from agent.utils.transcript import setup_session, TranscriptWriter
+from agent.utils.message_handler import process_assistant_message
 
 # Load environment variables
 load_dotenv()

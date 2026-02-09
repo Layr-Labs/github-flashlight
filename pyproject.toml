@@ -21,7 +21,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["code_analysis_agent*"]
+include = ["agent*"]
 
 [project.scripts]
-code-analysis-agent = "code_analysis_agent.agent:chat"
+code-analysis-agent = "agent.agent:chat"

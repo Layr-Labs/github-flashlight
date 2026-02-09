@@ -4,8 +4,8 @@ from typing import List, Dict, Tuple
 from pathlib import Path
 import json
 
-from code_analysis_agent.schemas.service import Service
-from code_analysis_agent.schemas.dependency_graph import DependencyGraph
+from agent.schemas.service import Service
+from agent.schemas.dependency_graph import DependencyGraph
 
 
 class DependencyGraphBuilder:

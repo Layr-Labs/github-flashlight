@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, List
 import json
 
-from code_analysis_agent.schemas.analysis import ServiceAnalysis
+from agent.schemas.analysis import ServiceAnalysis
 
 
 class ContextBuilder:
