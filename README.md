@@ -1,0 +1,280 @@
+# Code Analysis Agent
+
+A sophisticated codebase analysis agent using the Claude Agent SDK that performs dependency-aware analysis through multi-agent composition.
+
+## Features
+
+- **Automatic Service Discovery**: Identifies services in Rust (Cargo.toml), Node.js (package.json), and Python (pyproject.toml) codebases
+- **Dependency Graph Analysis**: Builds and visualizes service dependency relationships
+- **Two-Phase Analysis**:
+  - Phase 1: Analyzes foundation services with no dependencies
+  - Phase 2: Analyzes remaining services in dependency order with upstream context
+- **Context-Aware**: Code analyzers receive analyses of direct dependencies to understand integration patterns
+- **Comprehensive Documentation**: Generates system-wide architecture documentation with patterns, flows, and recommendations
+- **Interactive Website**: Automatically generates a React SPA with D3.js interactive dependency graph visualization
+- **Multi-Agent Orchestration**: Uses specialized agents for discovery, analysis, documentation synthesis, and website generation
+
+## Architecture
+
+The agent uses four specialized roles:
+
+1. **Primary Leader** (orchestrator)
+   - Discovers services by scanning for manifest files
+   - Builds dependency graph and determines analysis order
+   - Spawns code analyzer agents with appropriate context
+   - Spawns architecture documenter for final synthesis
+   - Spawns website generator for interactive visualization
+
+2. **Code Analyzer** (multiple instances)
+   - Deep analysis of individual services
+   - Examines architecture, components, data flows, dependencies, API surface
+   - Receives context from direct dependencies
+   - Outputs JSON and Markdown reports
+
+3. **Architecture Documenter** (single instance)
+   - Synthesizes all service analyses
+   - Identifies system-wide patterns
+   - Creates comprehensive architecture documentation
+
+4. **Website Generator** (single instance)
+   - Generates interactive React SPA with D3.js
+   - Creates searchable service catalog
+   - Implements interactive dependency graph visualization
+   - Includes service detail pages and architecture overview
+
+## Installation
+
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -e .
+
+# Set up API key
+cp .env.example .env
+# Edit .env and add your ANTHROPIC_API_KEY
+```
+
+## Usage
+
+```bash
+# Run the agent
+python -m code_analysis_agent.agent
+
+# Or use the installed command
+code-analysis-agent
+```
+
+Then provide a path to analyze:
+```
+You: Analyze the Rust codebase at /path/to/repo
+```
+
+The agent will:
+1. Scan for services (Cargo.toml files)
+2. Build dependency graph
+3. Analyze services in two phases:
+   - Phase 1: Services with no dependencies (parallel)
+   - Phase 2: Services with dependencies (in order, with context)
+4. Generate architecture documentation
+5. Create interactive website with D3.js dependency graph
+
+To view the website:
+```bash
+cd files/website
+npm install
+npm start
+# Opens at http://localhost:3000
+```
+
+## Output Structure
+
+```
+files/
+├── service_discovery/
+│   ├── services.json              # Discovered services metadata
+│   └── discovery_log.md           # Human-readable discovery log
+├── dependency_graphs/
+│   ├── dependency_graph.json      # Machine-readable graph
+│   └── dependency_graph.md        # Visualization
+├── service_analyses/
+│   ├── {service1}.json            # Structured analysis
+│   ├── {service1}.md              # Human-readable report
+│   └── ... (one pair per service)
+├── architecture_docs/
+│   ├── architecture.md            # Comprehensive documentation
+│   └── quick_reference.md         # One-page summary
+└── website/                        # Interactive React SPA
+    ├── public/
+    │   └── index.html
+    ├── src/
+    │   ├── components/
+    │   │   ├── DependencyGraph.jsx      # D3.js interactive graph
+    │   │   ├── ServiceList.jsx          # Service catalog
+    │   │   ├── ServiceDetail.jsx        # Service details
+    │   │   └── ...
+    │   ├── data/
+    │   │   └── analysisData.js          # Consolidated data
+    │   ├── App.js
+    │   └── index.js
+    ├── package.json
+    └── README.md
+
+logs/
+└── session_YYYYMMDD_HHMMSS/
+    ├── transcript.txt             # Conversation log
+    └── tool_calls.jsonl           # Structured tool usage
+```
+
+## Example Analysis Flow
+
+For a Rust codebase with this structure:
+```
+repo/
+├── common-utils/          (no dependencies)
+├── config-loader/         (no dependencies)
+├── database-layer/        (depends on common-utils)
+├── auth-service/          (depends on database-layer)
+└── api-gateway/           (depends on auth-service, database-layer)
+```
+
+The agent will:
+1. **Phase 1**: Analyze `common-utils` and `config-loader` in parallel
+2. **Phase 2**:
+   - Analyze `database-layer` with context from `common-utils`
+   - Analyze `auth-service` with context from `database-layer` only (not common-utils)
+   - Analyze `api-gateway` with context from `auth-service` and `database-layer`
+3. **Synthesis**: Generate comprehensive architecture documentation
+4. **Visualization**: Create interactive React website with D3.js dependency graph
+
+## Key Design Principles
+
+- **Direct Dependencies Only**: Analyzers receive context only from direct dependencies, not transitive ones
+- **Dependency Order**: Services are analyzed in topological order to ensure dependencies are analyzed first
+- **Parallel Execution**: Services at the same dependency level are analyzed in parallel
+- **Structured Output**: Both machine-readable (JSON) and human-readable (Markdown) outputs
+
+## Supported Languages
+
+- **Rust**: Full support (Cargo.toml discovery, dependency extraction)
+- **Node.js**: Partial support (package.json discovery)
+- **Python**: Partial support (pyproject.toml discovery)
+
+## Requirements
+
+- Python 3.10+
+- Claude API key
+- Access to the codebase to analyze
+
+## Development
+
+```bash
+# Install with dev dependencies
+pip install -e ".[dev]"
+
+# Run tests (when available)
+pytest
+```
+
+## How It Works
+
+The lead agent uses a sophisticated multi-phase workflow:
+
+### Discovery Phase
+- Uses Glob to find manifest files (Cargo.toml, package.json, pyproject.toml)
+- Reads each manifest to extract service metadata
+- Identifies internal dependencies (path-based in manifests)
+- Saves service inventory to JSON
+
+### Graph Building Phase
+- Constructs directed dependency graph
+- Calculates analysis order using two-phase approach:
+  - Phase 1: Services with in-degree 0 (no dependencies)
+  - Phase 2: Topological sort of remaining services
+- Visualizes graph in both JSON and Markdown
+
+### Analysis Phase
+- **Phase 1**: Spawns code-analyzer for each no-dependency service (parallel)
+- **Phase 2**: For each remaining service:
+  - Waits for its direct dependencies to complete
+  - Loads direct dependency analyses
+  - Builds context summary (architecture, APIs, components)
+  - Spawns code-analyzer with context
+  - Ensures proper ordering while maximizing parallelism
+
+### Synthesis Phase
+- Spawns architecture-documenter after all analyses complete
+- Reads all service analyses and dependency graph
+- Identifies system-wide patterns and architectural approaches
+- Generates comprehensive documentation with:
+  - System overview
+  - Service catalog
+  - Dependency visualization
+  - Architectural patterns
+  - Technology stack
+  - Major data flows
+  - Development guide
+  - Recommendations
+
+### Website Generation Phase
+- Spawns website-generator after documentation is complete
+- Reads all service analyses, dependency graphs, and architecture docs
+- Generates complete React SPA with:
+  - D3.js interactive force-directed dependency graph
+  - Searchable service catalog
+  - Service detail pages with full analysis
+  - Architecture overview dashboard
+  - Zoom, pan, and click-to-navigate functionality
+  - Color-coded nodes by phase (Phase 1/2)
+- Outputs production-ready application with package.json and build instructions
+
+## Interactive Website Features
+
+The generated React SPA provides an intuitive interface for exploring the codebase analysis:
+
+### Dependency Graph Visualization
+- **D3.js force-directed layout**: Services are nodes, dependencies are directed edges
+- **Interactive exploration**: Click nodes to navigate to service details, drag to reposition
+- **Zoom and pan**: Explore large codebases with smooth zoom/pan controls
+- **Color-coded**: Phase 1 (foundation) services in blue, Phase 2 (dependent) services in green
+- **Hover tooltips**: See service info on hover
+- **Highlight paths**: Visual emphasis on dependency chains
+
+### Service Catalog
+- **Search and filter**: Quickly find services by name, type, or technology
+- **Grid/list view**: Browse all services with key metadata
+- **Dependency badges**: See at-a-glance dependency counts
+- **Quick navigation**: Click to jump to service details or graph view
+
+### Service Detail Pages
+- **Complete analysis**: Architecture, key components, data flows
+- **Dependencies**: Links to direct dependencies and dependents
+- **API surface**: Exported functions, endpoints, types
+- **Code examples**: Syntax-highlighted snippets
+- **Technology stack**: Languages and frameworks used
+
+### Architecture Overview
+- **System summary**: High-level architecture description
+- **Quick stats**: Service counts, languages, patterns
+- **Technology inventory**: Complete tech stack breakdown
+
+### Technical Details
+- **Framework**: React 18 with React Router for SPA navigation
+- **Visualization**: D3.js v7 for interactive graphs
+- **Build system**: Create React App for zero-config setup
+- **Deployment**: Static build output for easy hosting
+
+## Contributing
+
+This is a demo project showcasing the Claude Agent SDK's multi-agent composition capabilities. Feel free to extend it with:
+- Additional language support
+- Visual dependency graphs (using graphviz)
+- Metrics collection (LOC, complexity)
+- Incremental analysis
+- Custom analysis plugins
+
+## License
+
+See parent repository for license information.
