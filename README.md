@@ -14,6 +14,38 @@ A sophisticated multi-agent processing pipeline using the Claude Agent SDK that 
 - **Interactive Website**: Automatically generates a React SPA with D3.js interactive dependency graph visualization
 - **Multi-Agent Orchestration**: Uses specialized agents for discovery, analysis, documentation synthesis, and website generation
 
+## Component Classification
+
+GitHub Flashlight automatically classifies components as applications or libraries to help distinguish between executable services and reusable packages:
+
+### 🔷 Binaries (Services/Applications)
+Executable applications that run as independent services:
+- **Rust**: Crates with `[[bin]]` section or `src/main.rs`
+- **Python**: Packages with `[project.scripts]` or `__main__.py`
+- **Node.js**: Packages with `"bin"` field or server frameworks
+
+Displayed as **rectangles (■)** in the dependency graph.
+
+### 🟢 Libraries (Packages)
+Reusable code libraries consumed by services:
+- **Rust**: Crates with only `[lib]` section
+- **Python**: Packages without entry points
+- **Node.js**: Packages without `"bin"` field
+
+Displayed as **circles (●)** in the dependency graph.
+
+### Detection Logic
+1. **Manifest analysis**: Checks Cargo.toml, package.json, pyproject.toml for binary indicators
+2. **File structure**: Looks for `main.rs` vs `lib.rs`, `__main__.py` presence
+3. **Naming patterns**: Keywords like "server", "api" → binary; "core", "utils" → library
+4. **Default**: Classifies as "library" when uncertain
+
+### Website Visualization
+The generated website offers three view modes:
+- **All Components**: Full dependency graph with visual distinction between services and libraries
+- **Services Only**: Focus on service architecture and their direct dependencies
+- **Libraries Only**: Focus on reusable components and their relationships
+
 ## Architecture
 
 The pipeline uses four specialized roles:

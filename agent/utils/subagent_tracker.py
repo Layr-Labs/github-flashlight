@@ -130,19 +130,55 @@ class SubagentTracker:
             tool_name: Name of the tool being used
             tool_input: Optional tool input parameters for detailed logging
         """
-        # Console and transcript: brief message
+        # Build base message
         message = f"\n[{agent_label}] → {tool_name}"
-        logger.info(message.strip())
-        if self.transcript_writer:
-            self.transcript_writer.write(message)
-        else:
-            print(message, flush=True)
 
-        # Transcript file only: add input details
+        # Add tool-specific details for console output
+        detail = self._get_tool_detail(tool_name, tool_input)
+        console_message = message + (f" {detail}" if detail else "")
+
+        # Log to console
+        logger.info(console_message.strip())
+        if self.transcript_writer:
+            self.transcript_writer.write(console_message)
+        else:
+            print(console_message, flush=True)
+
+        # Transcript file only: add full input details
         if self.transcript_writer and tool_input:
-            detail = self._format_tool_input(tool_input)
-            if detail:
-                self.transcript_writer.write_to_file(f"    Input: {detail}\n")
+            full_detail = self._format_tool_input(tool_input)
+            if full_detail:
+                self.transcript_writer.write_to_file(f"    Input: {full_detail}\n")
+
+    def _get_tool_detail(self, tool_name: str, tool_input: Optional[Dict[str, Any]]) -> Optional[str]:
+        """Extract human-readable detail for specific tools to show in console."""
+        if not tool_input:
+            return None
+
+        # File operations - show relative path
+        if tool_name in ("Grep", "Read", "Write") and 'file_path' in tool_input:
+            return self._format_path(tool_input['file_path'])
+
+        # Glob - show pattern
+        if tool_name == "Glob" and 'pattern' in tool_input:
+            return f"`{tool_input['pattern']}`"
+
+        # Bash commands - show truncated command
+        if tool_name == "Bash" and 'command' in tool_input:
+            command = tool_input['command']
+            max_length = 80
+            if len(command) > max_length:
+                return f"`{command[:max_length]}...`"
+            return f"`{command}`"
+
+        return None
+
+    def _format_path(self, file_path: str) -> str:
+        """Format a file path as relative if possible, otherwise absolute."""
+        try:
+            return str(Path(file_path).relative_to(Path.cwd()))
+        except ValueError:
+            return file_path
 
     def _format_tool_input(self, tool_input: Dict[str, Any], max_length: int = 100) -> str:
         """Format tool input for human-readable logging."""

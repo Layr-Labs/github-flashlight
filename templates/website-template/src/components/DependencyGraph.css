@@ -1,0 +1,96 @@
+.dependency-graph {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-md);
+}
+
+.graph-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #E5E7EB;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.legend {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.legend-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: var(--shadow-sm);
+}
+
+.graph-hint {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.graph-svg {
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #F9FAFB 0%, #FFFFFF 100%);
+}
+
+.graph-empty {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.graph-empty .empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.graph-empty p {
+  color: var(--text-secondary);
+}
+
+/* Tooltip styles (global) */
+.graph-tooltip {
+  position: absolute;
+  padding: 12px;
+  background: rgba(45, 55, 72, 0.95);
+  color: white;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  font-size: 0.875rem;
+  max-width: 300px;
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+}
+
+.graph-tooltip strong {
+  font-size: 1rem;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.graph-tooltip em {
+  color: #A0AEC0;
+  font-style: normal;
+  font-size: 0.75rem;
+  display: block;
+  margin-bottom: 8px;
+}

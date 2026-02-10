@@ -1,0 +1,7 @@
+{
+  "name": "@task-manager/common",
+  "version": "1.0.0",
+  "description": "Shared utilities for task manager services",
+  "main": "index.ts",
+  "types": "index.ts"
+}

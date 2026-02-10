@@ -1,0 +1,25 @@
+{
+  "name": "task-manager-example",
+  "version": "1.0.0",
+  "description": "Minimal CRUD microservices for testing analysis tools",
+  "scripts": {
+    "start:api": "ts-node services/api/server.ts",
+    "start:auth": "ts-node services/auth/server.ts",
+    "start:db": "ts-node services/database/server.ts",
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.6.0",
+    "jsonwebtoken": "^9.0.2",
+    "body-parser": "^1.20.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.20",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "ts-node": "^10.9.2"
+  }
+}

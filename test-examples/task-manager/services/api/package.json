@@ -1,0 +1,9 @@
+{
+  "name": "@task-manager/api-service",
+  "version": "1.0.0",
+  "description": "REST API service for task manager",
+  "main": "server.ts",
+  "dependencies": {
+    "@task-manager/common": "file:../../libraries/common"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@task-manager/database-service",
+  "version": "1.0.0",
+  "description": "In-memory database service for task manager",
+  "main": "server.ts",
+  "dependencies": {
+    "@task-manager/common": "file:../../libraries/common"
+  }
+}

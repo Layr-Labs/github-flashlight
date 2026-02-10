@@ -1,0 +1,159 @@
+.component-detail {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.back-button {
+  background: transparent;
+  border: none;
+  color: var(--text-accent);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.5rem 0;
+  margin-bottom: 1rem;
+  transition: all var(--transition);
+}
+
+.back-button:hover {
+  color: var(--color-primary-light);
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.detail-header h1 {
+  margin-bottom: 0.5rem;
+}
+
+.header-badges {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.badge-type {
+  background: #E5E7EB;
+  color: var(--text-primary);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.description-card {
+  background: linear-gradient(135deg, #F0F9FF, #E0F2FE);
+}
+
+.card {
+  margin-bottom: 2rem;
+}
+
+.card h2 {
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+
+.architecture-text,
+.api-surface-text {
+  line-height: 1.8;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+.key-components-list,
+.flow-list,
+.dependency-list {
+  list-style: none;
+  padding: 0;
+}
+
+.key-components-list li,
+.flow-list li,
+.dependency-list li {
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  border-left: 4px solid var(--color-primary);
+}
+
+.interactions-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.interaction-card {
+  padding: 1rem;
+  background: var(--bg-hover);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--color-accent);
+}
+
+.interaction-card h4 {
+  margin: 0 0 0.5rem 0;
+  color: var(--text-primary);
+}
+
+.interaction-type {
+  display: inline-block;
+  background: var(--color-accent);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.interaction-card p {
+  margin: 0.5rem 0 0 0;
+  color: var(--text-secondary);
+}
+
+/* Third-party integrations styling */
+.interaction-card.third-party {
+  border-left-color: #7C3AED;
+  background: linear-gradient(135deg, #F5F3FF, #EDE9FE);
+}
+
+.interaction-card.third-party .service-type {
+  background: #7C3AED;
+  color: white;
+}
+
+.interaction-card .integration-method {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.interaction-card .integration-method strong {
+  color: var(--text-primary);
+}
+
+.error-state {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.error-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.error-state h2 {
+  margin-bottom: 0.5rem;
+}
+
+.error-state p {
+  color: var(--text-secondary);
+  margin-bottom: 2rem;
+}

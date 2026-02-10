@@ -1,0 +1,9 @@
+{
+  "name": "@task-manager/auth-service",
+  "version": "1.0.0",
+  "description": "Authentication service for task manager",
+  "main": "server.ts",
+  "dependencies": {
+    "@task-manager/common": "file:../../libraries/common"
+  }
+}

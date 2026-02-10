@@ -9,6 +9,7 @@ from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions, AgentDefinitio
 from agent.utils.subagent_tracker import SubagentTracker
 from agent.utils.transcript import setup_session, TranscriptWriter
 from agent.utils.message_handler import process_assistant_message
+from agent.utils.template_loader import TemplateLoader
 
 # Load environment variables
 load_dotenv()
@@ -42,9 +43,31 @@ async def chat():
 
     # Load prompts
     lead_agent_prompt = load_prompt("lead_agent.txt")
-    code_analyzer_prompt = load_prompt("code_analyzer.txt")
+    base_code_analyzer_prompt = load_prompt("code_analyzer.txt")
     architecture_documenter_prompt = load_prompt("architecture_documenter.txt")
     website_generator_prompt = load_prompt("website_generator.txt")
+
+    # Load analysis templates and enhance code analyzer prompt
+    templates_dir = Path(__file__).parent.parent / "templates" / "analysis-template"
+    template_loader = TemplateLoader(templates_dir)
+
+    # Build enhanced code analyzer prompt with templates
+    template_instructions = template_loader.get_template_instructions()
+    application_template = template_loader.get_template("application")
+    package_template = template_loader.get_template("package")
+
+    code_analyzer_prompt = f"""{base_code_analyzer_prompt}
+
+{template_instructions}
+
+<application_analysis_template>
+{application_template}
+</application_analysis_template>
+
+<package_analysis_template>
+{package_template}
+</package_analysis_template>
+"""
 
     # Initialize subagent tracker with transcript writer and session directory
     tracker = SubagentTracker(transcript_writer=transcript, session_dir=session_dir)
@@ -57,7 +80,8 @@ async def chat():
                 "The code-analyzer uses Glob, Grep, Read, and Bash to explore code structure, "
                 "identify key components, trace data flows, and document architecture. "
                 "Receives upstream dependency context when analyzing services with dependencies. "
-                "Produces structured analysis reports in both JSON and Markdown formats. "
+                "Produces structured analysis reports in both JSON and Markdown formats "
+                "in files/{project_name}/service_analyses/. "
                 "Each service should get its own code-analyzer instance."
             ),
             tools=["Glob", "Grep", "Read", "Bash", "Write"],
@@ -67,10 +91,10 @@ async def chat():
         "architecture-documenter": AgentDefinition(
             description=(
                 "Use this agent AFTER all service analyses are complete to synthesize findings. "
-                "The architecture-documenter reads all service analyses from files/service_analyses/, "
-                "reads the dependency graph from files/dependency_graphs/, "
+                "The architecture-documenter reads all service analyses from files/{project_name}/service_analyses/, "
+                "reads the dependency graph from files/{project_name}/dependency_graphs/, "
                 "identifies system-wide patterns and architectural approaches, "
-                "and creates comprehensive architecture documentation in files/architecture_docs/. "
+                "and creates comprehensive architecture documentation in files/{project_name}/architecture_docs/. "
                 "Spawn this agent once at the end to create the final documentation."
             ),
             tools=["Glob", "Read", "Write"],
@@ -80,10 +104,11 @@ async def chat():
         "website-generator": AgentDefinition(
             description=(
                 "Use this agent AFTER architecture documentation is complete to generate a web frontend. "
-                "The website-generator reads all service analyses, dependency graphs, and architecture docs, "
-                "then creates a complete React SPA with D3.js interactive dependency graph visualization "
-                "in files/website/. Generates all necessary files: package.json, components, styles, "
-                "and build instructions. Spawn this agent once at the very end to create the interactive website."
+                "The website-generator reads all service analyses, dependency graphs, and architecture docs "
+                "from files/{project_name}/, then creates a complete React SPA with D3.js interactive "
+                "dependency graph visualization in files/{project_name}/website/. Generates all necessary "
+                "files: package.json, components, styles, and build instructions. Spawn this agent once "
+                "at the very end to create the interactive website."
             ),
             tools=["Glob", "Read", "Write", "Bash"],
             prompt=website_generator_prompt,
