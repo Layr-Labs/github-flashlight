@@ -28,10 +28,9 @@ class Application(BaseComponent):
     """
 
     libraries_used: List[str] = field(default_factory=list)  # Internal libraries this application uses
-    application_interactions: List[Dict[str, str]] = field(default_factory=list)  # How this app interacts with other apps
-    # application_interactions format: [{"target": "api-service", "type": "http_api", "description": "Calls /users endpoint"}]
-    third_party_applications: List[Dict[str, str]] = field(default_factory=list)  # External services/APIs this app integrates with
-    # third_party_applications format: [{"name": "AWS S3", "type": "object_storage", "description": "Stores user uploads", "integration_method": "AWS SDK"}]
+    caller_dependencies: List[str] = field(default_factory=list)  # Applications that call this application
+    callee_dependencies: List[str] = field(default_factory=list)  # Applications that this application calls
+    # Note: external_dependencies inherited from BaseComponent represents third-party apps this integrates with
 
     def to_dict(self) -> dict:
         """Serialize to dictionary for JSON output."""
@@ -44,8 +43,8 @@ class Application(BaseComponent):
             "description": self.description,
             "external_dependencies": self.external_dependencies,
             "libraries_used": self.libraries_used,
-            "application_interactions": self.application_interactions,
-            "third_party_applications": self.third_party_applications,
+            "caller_dependencies": self.caller_dependencies,
+            "callee_dependencies": self.callee_dependencies,
             "key_files": [str(f) for f in self.key_files],
             "metadata": self.metadata,
         }
@@ -61,8 +60,8 @@ class Application(BaseComponent):
             description=data["description"],
             external_dependencies=data.get("external_dependencies", []),
             libraries_used=data.get("libraries_used", []),
-            application_interactions=data.get("application_interactions", []),
-            third_party_applications=data.get("third_party_applications", []),
+            caller_dependencies=data.get("caller_dependencies", []),
+            callee_dependencies=data.get("callee_dependencies", []),
             key_files=[Path(f) for f in data.get("key_files", [])],
             metadata=data.get("metadata", {}),
         )

@@ -73,7 +73,7 @@ PLACEHOLDERS GUIDE:
 
 ## Dependencies
 
-### External Dependencies
+### External Applications
 
 - **[package-name]** ([VERSION]): [One-sentence description of what the package does]. [2-3 sentences describing key features, APIs, or capabilities provided]. [How this application uses it - specific functions, patterns, or integration points]. [Any notable configuration or usage details like performance characteristics, feature flags, etc.]
 
@@ -81,9 +81,9 @@ PLACEHOLDERS GUIDE:
 
 - **[package-name]** ([VERSION]): [Description and usage details]
 
-[List all major external dependencies - typically 5-15 packages depending on application complexity. Focus on direct dependencies that are critical to functionality.]
+[List all major external applications - typically 5-15 packages depending on application complexity. Focus on direct applications that are critical to functionality.]
 
-### Internal Dependencies
+### Internal Aplications
 
 - **[internal-module-name]** (`[relative/path]`): [One-sentence description of what this internal dependency provides]. [2-3 sentences describing what is imported from it, how it's used, and why this dependency exists. Include specific types, functions, or configurations imported.]
 

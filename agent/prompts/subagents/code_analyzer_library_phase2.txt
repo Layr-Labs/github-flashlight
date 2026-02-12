@@ -1,0 +1,24 @@
+Analyze the {library_name} library.
+
+Component Information:
+- Name: {library_name}
+- Type: {component_type}
+- Classification: library
+- Location: {component_path}
+- Description: {component_description}
+- Direct Dependencies: {dependency_list}
+
+{upstream_context}
+
+Perform deep analysis while respecting the output structure of `templates/analysis-template/library_analysis_template.md`:
+1. Architecture: Overall design patterns and structure
+2. Key Components: Major modules, structs, classes, functions
+3. Data Flows: Important data paths and control flows
+4. External Dependencies: Third-party libraries used
+5. Internal Dependencies: HOW this library uses its direct library dependencies (from context above)
+6. API Surface: Public interfaces exposed to other libraries/applications
+
+Focus on understanding how this library integrates with its direct dependencies.
+
+Save your analysis to:
+- files/service_analyses/{library_name}.md (human-readable and adherent to library_analysis_template.md)

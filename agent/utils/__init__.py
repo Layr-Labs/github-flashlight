@@ -1,13 +1,14 @@
 """Utility modules for code analysis agent."""
 
-from .subagent_tracker import SubagentTracker, SubagentSession, ToolCallRecord
-from .transcript import TranscriptWriter
-from .message_handler import process_assistant_message
+from .dependency_graph import DependencyGraphBuilder
+from .template_loader import TemplateLoader
+from .transcript import TranscriptWriter, setup_session
+from .subagent_tracker import SubagentTracker
 
 __all__ = [
-    "SubagentTracker",
-    "SubagentSession",
-    "ToolCallRecord",
+    "DependencyGraphBuilder",
+    "TemplateLoader",
     "TranscriptWriter",
-    "process_assistant_message",
+    "setup_session",
+    "SubagentTracker",
 ]

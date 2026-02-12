@@ -1,0 +1,46 @@
+Generate an interactive React SPA to visualize the codebase analysis with TWO SEPARATE GRAPHS.
+
+Steps:
+1. Use Glob to find all analysis files:
+   - files/service_analyses/*.json
+   - files/dependency_graphs/library_graph.json
+   - files/dependency_graphs/application_graph.json
+   - files/architecture_docs/*.md
+2. Use Read to load all data
+3. Create consolidated data structure for the frontend
+4. Generate complete React application in files/website/:
+   - package.json with React, D3.js, React Router
+   - public/index.html
+   - src/index.js and src/App.js
+   - src/components/ApplicationGraph.jsx (D3.js interactive graph - NEW)
+   - src/components/LibraryGraph.jsx (D3.js interactive graph - NEW)
+   - src/components/ComponentList.jsx (searchable catalog with tabs for apps/libs)
+   - src/components/ComponentDetail.jsx (component details)
+   - src/components/Header.jsx (navigation)
+   - src/components/ArchitectureOverview.jsx (system overview)
+   - src/data/analysisData.js (consolidated data including both graphs)
+   - src/utils/graphLayout.js and dataTransforms.js
+   - src/index.css (styling)
+   - README.md with build instructions
+   - .gitignore
+
+Key Features:
+- TWO SEPARATE interactive D3.js visualizations:
+  1. Application Interaction Graph:
+     - Nodes: Applications (different color/shape than libraries)
+     - Edges: API calls, shared DB access, message queue communication
+     - Edge labels showing interaction type
+     - Zoom, pan, drag functionality
+  2. Library Dependency Graph:
+     - Nodes: Libraries color-coded by phase (Phase 1/2)
+     - Edges: Library dependencies
+     - Traditional dependency graph layout
+     - Zoom, pan, drag functionality
+- Separate pages/tabs for each graph
+- Click nodes to navigate to component details
+- Searchable component catalog (separate tabs for applications vs libraries)
+- Component detail pages showing:
+  - For applications: which libraries used, which apps interacted with
+  - For libraries: which libraries depended on, which apps use this library
+
+Use Write to create all files.

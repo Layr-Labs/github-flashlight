@@ -1,0 +1,48 @@
+Analyze the {application_name} application.
+
+Component Information:
+- Name: {application_name}
+- Type: {component_type}
+- Classification: application
+- Location: {component_path}
+- Description: {component_description}
+- Libraries Used: {libraries_used_list}
+
+{library_context}
+
+This is an APPLICATION - executable system with entrypoint and business purpose.
+
+Perform deep analysis:
+1. Architecture: Overall design patterns and structure
+2. Key Components: Major modules, structs, classes, functions
+3. System Flows: End-to-end request/response flows, data processing pipelines
+4. External Dependencies: Third-party libraries used
+5. Library Usage: HOW this application uses internal libraries (from context above)
+6. Application Interactions: Identify and document interactions with OTHER APPLICATIONS:
+   - HTTP API calls to other applications (extract endpoints, methods, purposes)
+   - Shared database access with other applications
+   - Message queue/event bus communication
+   - gRPC/GraphQL calls to other services
+7. API Surface: Public interfaces this application exposes to other applications
+
+CRITICAL: For application_interactions, identify:
+- Target application name
+- Interaction type (http_api, shared_database, message_queue, grpc)
+- Description (what endpoints, what data, what purpose)
+
+Example:
+application_interactions: [
+  {
+    "target": "user-service",
+    "type": "http_api",
+    "description": "Calls GET /api/users/{id} to fetch user profiles"
+  },
+  {
+    "target": "order-service",
+    "type": "shared_database",
+    "description": "Both applications write to 'orders' table in PostgreSQL"
+  }
+]
+
+Save your analysis to:
+- files/service_analyses/{application_name}.md (human-readable)

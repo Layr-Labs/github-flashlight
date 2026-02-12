@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions, AgentDefinition, HookMatcher
@@ -13,6 +14,19 @@ from agent.utils.template_loader import TemplateLoader
 
 # Load environment variables
 load_dotenv()
+
+# Setup logging based on environment variable
+VERBOSE = os.environ.get("AGENT_VERBOSE", "false").lower() in ("true", "1", "yes")
+DEBUG = os.environ.get("AGENT_DEBUG", "false").lower() in ("true", "1", "yes")
+
+# Configure logging
+log_level = logging.DEBUG if DEBUG else (logging.INFO if VERBOSE else logging.WARNING)
+logging.basicConfig(
+    level=log_level,
+    format='%(asctime)s [%(name)s] %(levelname)s: %(message)s',
+    datefmt='%H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 # Paths to prompt files
 PROMPTS_DIR = Path(__file__).parent / "prompts"
@@ -70,7 +84,11 @@ async def chat():
 """
 
     # Initialize subagent tracker with transcript writer and session directory
-    tracker = SubagentTracker(transcript_writer=transcript, session_dir=session_dir)
+    tracker = SubagentTracker(
+        transcript_writer=transcript,
+        session_dir=session_dir,
+        verbose=VERBOSE
+    )
 
     # Define specialized subagents
     agents = {
@@ -90,16 +108,18 @@ async def chat():
         ),
         "architecture-documenter": AgentDefinition(
             description=(
-                "Use this agent AFTER all service analyses are complete to synthesize findings. "
-                "The architecture-documenter reads all service analyses from files/{project_name}/service_analyses/, "
-                "reads the dependency graph from files/{project_name}/dependency_graphs/, "
-                "identifies system-wide patterns and architectural approaches, "
-                "and creates comprehensive architecture documentation in files/{project_name}/architecture_docs/. "
-                "Spawn this agent once at the end to create the final documentation."
+                "Use this agent to incrementally synthesize architecture documentation. "
+                "SPAWN CONCURRENTLY after library analysis completes (Step 3.3 in lead agent workflow). "
+                "The architecture-documenter reads library_graph.json and library analyses immediately, "
+                "then polls the transcript file for [ANALYSIS_EVENT] markers to discover application completions incrementally. "
+                "It builds understanding progressively as applications complete (Phase 2), "
+                "performs final synthesis when all_analyses_complete signal received (Phase 3), "
+                "and creates comprehensive dual-graph documentation in files/{project_name}/architecture_docs/. "
+                "DO NOT wait for this agent - it runs in parallel with application analysis for ~24% performance improvement."
             ),
             tools=["Glob", "Read", "Write"],
             prompt=architecture_documenter_prompt,
-            model="sonnet"  # Use sonnet for comprehensive synthesis
+            model="sonnet"  # Use sonnet for comprehensive synthesis; consider opus for higher quality
         ),
         "website-generator": AgentDefinition(
             description=(
@@ -147,6 +167,13 @@ async def chat():
     print("=" * 50)
     print("\nAnalyze codebases with dependency-aware")
     print("multi-agent analysis.")
+
+    # Show logging mode
+    if DEBUG:
+        print("\n🔍 DEBUG MODE ENABLED - Full API trace logging")
+    elif VERBOSE:
+        print("\n🔍 VERBOSE MODE ENABLED - Detailed SDK interaction logging")
+
     print("\nProvide a path to analyze, or type 'exit' to quit.\n")
 
     try:
@@ -164,15 +191,28 @@ async def chat():
                 # Write user input to transcript (file only, not console)
                 transcript.write_to_file(f"\nYou: {user_input}\n")
 
-                # Send to agent
                 await client.query(prompt=user_input)
 
                 transcript.write("\nAgent: ", end="")
 
                 # Stream and process response
+                message_count = 0
+                api_call_count = 0
                 async for msg in client.receive_response():
-                    if type(msg).__name__ == 'AssistantMessage':
+                    message_count += 1
+                    msg_type = type(msg).__name__
+
+                    if VERBOSE:
+                        logger.debug(f"   Message {message_count}: {msg_type}")
+
+                    # Track API calls by counting AssistantMessages (each represents an API round-trip)
+                    if msg_type == 'AssistantMessage':
+                        api_call_count += 1
+                        print(f"\n🌐 [CLAUDE CALL #{api_call_count}] Claude AssistantMessage completed", flush=True)
                         process_assistant_message(msg, tracker, transcript)
+
+                if VERBOSE:
+                    logger.info(f"✓ RESPONSE COMPLETE ({message_count} messages, {api_call_count} API calls)")
 
                 transcript.write("\n")
     finally:

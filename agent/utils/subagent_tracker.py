@@ -34,6 +34,10 @@ class SubagentSession:
     prompt_preview: str
     subagent_id: str  # Unique identifier like "RESEARCHER-1"
     tool_calls: List[ToolCallRecord] = field(default_factory=list)
+    completed_at: Optional[str] = None
+    is_complete: bool = False
+    api_call_count: int = 0  # Track API round-trips for this subagent
+    last_api_call_time: Optional[str] = None
 
 
 class SubagentTracker:
@@ -47,7 +51,12 @@ class SubagentTracker:
     4. Logs tool usage to console and transcript files
     """
 
-    def __init__(self, transcript_writer=None, session_dir: Optional[Path] = None):
+    def __init__(
+        self,
+        transcript_writer=None,
+        session_dir: Optional[Path] = None,
+        verbose: bool = False
+    ):
         # Map: parent_tool_use_id -> SubagentSession
         self.sessions: Dict[str, SubagentSession] = {}
 
@@ -63,13 +72,16 @@ class SubagentTracker:
         # Transcript writer for logging clean output
         self.transcript_writer = transcript_writer
 
+        # Verbose mode for detailed API logging
+        self.verbose = verbose
+
         # Tool call detail log (JSONL format)
         self.tool_log_file = None
         if session_dir:
             tool_log_path = session_dir / "tool_calls.jsonl"
             self.tool_log_file = open(tool_log_path, "w", encoding="utf-8")
 
-        logger.debug("SubagentTracker initialized")
+        logger.debug("SubagentTracker initialized (verbose=%s)", verbose)
 
     def register_subagent_spawn(
         self,
@@ -110,7 +122,67 @@ class SubagentTracker:
         logger.info(f"Task: {description}")
         logger.info(f"{'='*60}")
 
+        # Verbose spawn logging
+        if self.verbose:
+            logger.info(f"📝 AGENT DETAILS:")
+            logger.info(f"   Type: {subagent_type}")
+            logger.info(f"   Tool Use ID: {tool_use_id}")
+            logger.info(f"   Spawn Time: {session.spawned_at}")
+            logger.debug(f"   Prompt Preview: {session.prompt_preview}")
+
         return subagent_id
+
+    def mark_subagent_complete(self, tool_use_id: str):
+        """
+        Mark a subagent session as complete.
+
+        Args:
+            tool_use_id: The ID of the Task tool use block
+        """
+        session = self.sessions.get(tool_use_id)
+        if not session:
+            logger.warning(f"Attempted to mark unknown subagent as complete: {tool_use_id}")
+            return
+
+        session.completed_at = datetime.now().isoformat()
+        session.is_complete = True
+
+        logger.info(f"{'='*60}")
+        logger.info(f"✅ SUBAGENT COMPLETED: {session.subagent_id}")
+        logger.info(f"{'='*60}")
+        logger.info(f"Task: {session.description}")
+        logger.info(f"Duration: {session.spawned_at} → {session.completed_at}")
+        logger.info(f"API calls: {session.api_call_count}")
+        logger.info(f"Tool calls: {len(session.tool_calls)}")
+        logger.info(f"{'='*60}")
+
+        # Verbose completion logging
+        if self.verbose:
+            logger.info(f"📊 COMPLETION DETAILS:")
+            logger.info(f"   Type: {session.subagent_type}")
+            logger.info(f"   Tool Use ID: {tool_use_id}")
+            logger.info(f"   Started: {session.spawned_at}")
+            logger.info(f"   Completed: {session.completed_at}")
+            logger.info(f"   API Calls: {session.api_call_count}")
+            logger.info(f"   Tool Calls: {len(session.tool_calls)}")
+
+        # Log completion to JSONL
+        self._log_to_jsonl({
+            "event": "subagent_complete",
+            "timestamp": session.completed_at,
+            "subagent_id": session.subagent_id,
+            "subagent_type": session.subagent_type,
+            "tool_use_id": tool_use_id,
+            "description": session.description,
+            "spawned_at": session.spawned_at,
+            "completed_at": session.completed_at,
+            "api_call_count": session.api_call_count,
+            "tool_call_count": len(session.tool_calls)
+        })
+
+        # Write analysis event marker to transcript for code-analyzer completions
+        if session.subagent_type == "code-analyzer":
+            self._write_analysis_event(session)
 
     def set_current_context(self, parent_tool_use_id: Optional[str]):
         """
@@ -155,8 +227,16 @@ class SubagentTracker:
         if not tool_input:
             return None
 
+        # Grep - show pattern and optional path
+        if tool_name == "Grep":
+            pattern = tool_input.get('pattern', '')
+            path = tool_input.get('path')
+            if path:
+                return f"`{pattern}` in {self._format_path(path)}"
+            return f"`{pattern}`"
+
         # File operations - show relative path
-        if tool_name in ("Grep", "Read", "Write") and 'file_path' in tool_input:
+        if tool_name in ("Read", "Write") and 'file_path' in tool_input:
             return self._format_path(tool_input['file_path'])
 
         # Glob - show pattern
@@ -214,11 +294,59 @@ class SubagentTracker:
             self.tool_log_file.write(json.dumps(log_entry) + "\n")
             self.tool_log_file.flush()
 
+    def _write_analysis_event(self, session: SubagentSession):
+        """Write analysis completion event marker to transcript for architecture documenter to poll.
+
+        Args:
+            session: The completed code-analyzer subagent session
+        """
+        if not self.transcript_writer:
+            return
+
+        # Extract component name from description (e.g., "Analyze common-utils" -> "common-utils")
+        component_name = session.description
+        if component_name.startswith("Analyze "):
+            component_name = component_name[len("Analyze "):].strip()
+
+        # Determine component type from description or prompt
+        # Typical descriptions: "Analyze {component_name}" where prompt contains classification info
+        component_type = "unknown"
+        if "classification=library" in session.prompt_preview.lower() or "library" in session.description.lower():
+            component_type = "library"
+        elif "classification=application" in session.prompt_preview.lower() or "application" in session.description.lower():
+            component_type = "application"
+
+        # Determine phase for libraries (extract from prompt if available)
+        phase = None
+        if component_type == "library":
+            if "phase 1" in session.prompt_preview.lower() or "no dependencies" in session.prompt_preview.lower():
+                phase = 1
+            elif "phase 2" in session.prompt_preview.lower() or "with dependencies" in session.prompt_preview.lower():
+                phase = 2
+
+        # Build event JSON
+        event_data = {
+            "event": "library_ready" if component_type == "library" else "application_ready",
+            "name": component_name,
+            "timestamp": session.completed_at
+        }
+        if phase is not None:
+            event_data["phase"] = phase
+
+        # Write event marker to transcript
+        event_line = f"[ANALYSIS_EVENT] {json.dumps(event_data)}\n"
+        self.transcript_writer.write_to_file(event_line)
+
     async def pre_tool_use_hook(self, hook_input, tool_use_id, context):
         """Hook callback for PreToolUse events - captures tool calls."""
         tool_name = hook_input['tool_name']
         tool_input = hook_input['tool_input']
         timestamp = datetime.now().isoformat()
+
+        # Verbose API logging
+        if self.verbose:
+            logger.info(f"🔧 API CALL: Tool={tool_name} ID={tool_use_id[:8]}...")
+            logger.debug(f"   Input: {json.dumps(tool_input, indent=2)}")
 
         # Determine agent context
         is_subagent = self._current_parent_id and self._current_parent_id in self.sessions
@@ -227,6 +355,30 @@ class SubagentTracker:
             session = self.sessions[self._current_parent_id]
             agent_id = session.subagent_id
             agent_type = session.subagent_type
+
+            # Track API calls: assume new API call if this is first tool or >2s since last
+            is_new_api_call = False
+            if session.last_api_call_time is None:
+                # First tool call from this subagent = first API response
+                is_new_api_call = True
+            else:
+                # Check if enough time passed to indicate a new API round-trip
+                from datetime import datetime as dt
+                last_time = dt.fromisoformat(session.last_api_call_time)
+                current_time = dt.fromisoformat(timestamp)
+                time_diff = (current_time - last_time).total_seconds()
+                if time_diff > 2.0:  # 2 second gap suggests new API call
+                    is_new_api_call = True
+
+            if is_new_api_call:
+                session.api_call_count += 1
+                session.last_api_call_time = timestamp
+                print(f"\n🌐 [{agent_id} API CALL #{session.api_call_count}] Claude API request/response completed", flush=True)
+                if self.verbose:
+                    logger.info(f"   📡 API Round-trip #{session.api_call_count} for {agent_id}")
+
+            if self.verbose:
+                logger.info(f"   Agent: [{agent_id}] ({agent_type})")
 
             # Create and store record for subagent
             record = ToolCallRecord(
@@ -254,6 +406,9 @@ class SubagentTracker:
             })
         elif tool_name != 'Task':  # Skip Task calls for main agent (handled by spawn message)
             # Main agent tool call
+            if self.verbose:
+                logger.info(f"   Agent: [MAIN AGENT] (lead)")
+
             self._log_tool_use("MAIN AGENT", tool_name, tool_input)
             self._log_to_jsonl({
                 "event": "tool_call_start",
@@ -280,16 +435,29 @@ class SubagentTracker:
 
         # Check for errors
         error = tool_response.get('error') if isinstance(tool_response, dict) else None
+        output_size = len(str(tool_response)) if tool_response else 0
+
         if error:
             record.error = error
             session = self.sessions.get(record.parent_tool_use_id)
             if session:
                 logger.warning(f"[{session.subagent_id}] Tool {record.tool_name} error: {error}")
 
+            # Verbose error logging
+            if self.verbose:
+                logger.error(f"❌ TOOL ERROR: ID={tool_use_id[:8]}... Error={error}")
+
         # Get agent info for logging
         session = self.sessions.get(record.parent_tool_use_id)
         agent_id = session.subagent_id if session else "MAIN_AGENT"
         agent_type = session.subagent_type if session else "lead"
+
+        # Verbose completion logging
+        if self.verbose:
+            status = "✅ SUCCESS" if error is None else "❌ FAILED"
+            logger.info(f"{status}: Tool={record.tool_name} ID={tool_use_id[:8]}... Size={output_size} bytes")
+            if error is None:
+                logger.debug(f"   Output preview: {str(tool_response)[:200]}...")
 
         # Log completion to JSONL
         self._log_to_jsonl({
@@ -301,7 +469,7 @@ class SubagentTracker:
             "tool_name": record.tool_name,
             "success": error is None,
             "error": error,
-            "output_size": len(str(tool_response)) if tool_response else 0
+            "output_size": output_size
         })
 
         return {'continue_': True}

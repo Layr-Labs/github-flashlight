@@ -106,7 +106,10 @@ Step 1.3: Create Component Inventory
         "root_path": "string",
         "description": "string",
         "libraries_used": ["internal library names"],
-        "external_dependencies": ["third-party packages"],
+        "external_dependencies": ["third-party apps that interact with application"],
+        "caller_dependencies:" ["application component"],
+        "callee_dependencies:", ["application component"],
+        "dependencies": "string",
         "key_files": ["important source files"]
       }
     ],
@@ -127,155 +130,106 @@ Step 1.3: Create Component Inventory
 
 **PHASE 2: DEPENDENCY ANALYSIS - BUILD TWO GRAPHS**
 
-Step 2.1: Build Library Dependency Graph
-- Create directed graph: library -> [library dependencies]
-- Only include LIBRARY-to-LIBRARY dependencies (internal libraries within same repo)
-- External dependencies tracked in metadata but not in graph
+Step 2.1: Build Dependency Graphs Using Python Script
+- Use Bash to run: python scripts/build_dependency_graph.py files/service_discovery/components.json files/dependency_graphs
+- This script uses existing graph utilities (DependencyGraph, DependencyGraphBuilder) to:
+  * Build library dependency graph with topological sort (Kahn's algorithm)
+  * Compute Phase 1 (no dependencies) and Phase 2 (topological order) for libraries
+  * Create initial application graph (nodes only, edges added during analysis)
+  * Generate both JSON and markdown outputs for both graphs
 
-For topological sort:
-1. Calculate in-degree for each library (number of libraries that depend on it)
-2. Phase 1 = libraries with in-degree 0 (no library dependencies)
-3. Phase 2 = topological sort of remaining libraries using Kahn's algorithm:
-   - Start with Phase 1 libraries
-   - Remove each, update in-degrees of dependent libraries
-   - Add libraries with in-degree 0 to queue
-   - Continue until all processed
+The script outputs:
+- files/dependency_graphs/library_graph.json - Library dependency graph with analysis phases
+- files/dependency_graphs/application_graph.json - Application graph (edges populated during analysis)
+- files/dependency_graphs/library_graph.md - Human-readable library graph visualization
+- files/dependency_graphs/application_graph.md - Human-readable application graph visualization
 
-Step 2.2: Build Application Interaction Graph
-- Create directed graph: application -> [applications it interacts with]
-- Edges represent runtime interactions between applications:
-  * HTTP API calls (application A calls APIs on application B)
-  * Shared database access (applications sharing the same database)
-  * Message queue communication
-  * gRPC/GraphQL calls
-- Also includes third-party service integrations:
-  * External APIs and SaaS providers (AWS, Stripe, SendGrid, etc.)
-  * Third-party services are discovered during code analysis
-  * Represented as special nodes in the graph
-- Note: This graph is discovered during analysis phase, not pre-populated
-- Initial graph has nodes (applications) but edges are added by code-analyzer subagents
-- Each application lists which internal libraries it uses (metadata, not graph edges)
-- Each application lists which third-party services it integrates with (metadata, also shown in graph)
+Step 2.2: Verify Graph Generation
+- Use Read to load files/dependency_graphs/library_graph.json
+- Extract phase1 and phase2 arrays from analysis_order
+- Verify script completed successfully before proceeding
 
-Step 2.3: Save Both Graphs
-- Use Write to save library graph to files/dependency_graphs/library_graph.json
-  Format:
-  {
-    "graph_type": "library_dependencies",
-    "nodes": [
-      {
-        "id": "library-name",
-        "type": "rust-crate" | "nodejs-package" | "python-package",
-        "classification": "library",
-        "phase": 1 | 2
-      }
-    ],
-    "edges": [
-      {"from": "library-a", "to": "library-b"}  // library-a depends on library-b
-    ],
-    "analysis_order": {
-      "phase1": [...],  // Libraries with no dependencies
-      "phase2": [...]   // Libraries in topological order
-    }
-  }
+Library Graph Structure:
+- Directed graph: library -> [library dependencies]
+- Only LIBRARY-to-LIBRARY dependencies (internal libraries within same repo)
+- Phase 1 = libraries with no dependencies (analyze in parallel)
+- Phase 2 = remaining libraries in topological order (analyze sequentially based on dependencies)
 
-- Use Write to save application graph to files/dependency_graphs/application_graph.json
-  Format:
-  {
-    "graph_type": "application_interactions",
-    "nodes": [
-      {
-        "id": "application-name",
-        "type": "rust-crate" | "nodejs-package" | "python-package",
-        "classification": "application",
-        "libraries_used": ["lib1", "lib2"],  // Which internal libraries this app uses
-        "external_dependencies": ["serde", "tokio"],  // Third-party packages (npm/cargo/pip)
-        "third_party_applications": [  // External services/APIs integrated
-          {
-            "name": "AWS S3",
-            "type": "object_storage",
-            "description": "Stores user uploads",
-            "integration_method": "AWS SDK"
-          }
-        ]
-      },
-      {
-        "id": "third-party:aws-s3",  // Third-party service nodes (for visualization)
-        "type": "third-party",
-        "classification": "external_service",
-        "service_category": "object_storage",
-        "name": "AWS S3"
-      }
-    ],
-    "edges": [
-      {
-        "from": "app-a",
-        "to": "app-b",
-        "interaction_type": "http_api" | "shared_database" | "message_queue" | "grpc" | "graphql",
-        "description": "Details about the interaction"
-      },
-      {
-        "from": "app-a",
-        "to": "third-party:aws-s3",
-        "interaction_type": "third_party_integration",
-        "description": "Uses S3 for file storage via AWS SDK"
-      }
-    ]
-  }
+Application Graph Structure:
+- Nodes: Applications with metadata (libraries_used, external_dependencies)
+- Edges: Initially empty, populated during application analysis phase
+- Edges represent runtime interactions: HTTP API calls, shared databases, message queues, gRPC/GraphQL
+- Also tracks third-party service integrations (AWS, Stripe, etc.) discovered during analysis
 
-  Note: Third-party service nodes and edges are populated during code analysis phase when
-  code-analyzer subagents discover external service integrations.
-
-- Use Write to save human-readable visualizations:
-  * files/dependency_graphs/library_graph.md
-  * files/dependency_graphs/application_graph.md
-
-**PHASE 3: ORCHESTRATE ANALYSIS**
+**PHASE 3: ORCHESTRATE ANALYSIS using Subagent Tasks**
 
 Analysis Order Strategy:
-1. Analyze all LIBRARIES first (Phase 1 & 2 based on their dependencies)
-2. Analyze all APPLICATIONS last (they can reference library analyses)
+1. Analyze all LIBRARIES by their depth in the library graph
+2. Analyze all APPLICATIONS last (they can reference library analysis contexts)
 
-Step 3.1: Analyze Phase 1 Libraries (No Library Dependencies)
-For each library in Phase 1:
+Step 3.1: Analyze depth=0 Libraries (No Library Dependencies)
+For each library in depth=0:
   - Spawn code-analyzer subagent with Task tool
   - subagent_type: "code-analyzer"
   - description: "Analyze {library_name}"
   - prompt: Include library name, path, type, description, classification=library, NO upstream context
-  - Spawn all Phase 1 analyzers IN PARALLEL
+  - Spawn all depth=0 analyzers IN PARALLEL
 
-Wait for ALL Phase 1 library analyzers to complete before proceeding.
+Wait for ALL depth=0 library analyzers to complete before proceeding to next step.
 
 Step 3.2: Analyze Phase 2 Libraries (Dependency Order)
-For each library in Phase 2 (in topological order):
-  - Get library's DIRECT dependencies using the library graph
-  - For each direct dependency:
-    * Use Read to load {dep_name}.md from files/service_analyses/
-    * Parse markdown to extract key info:
-      - Architecture section (## Architecture)
-      - Key components (## Key Components section)
-      - API surface (## API Surface section)
-    * Create summary from these sections
-    * **Note**: Parsing markdown is less optimal than JSON for data processing, but simplifies the architecture by having markdown as the single source of truth
-  - Build upstream context string with summaries of DIRECT library dependencies only
-  - Spawn code-analyzer subagent with Task tool
-  - subagent_type: "code-analyzer"
-  - description: "Analyze {library_name}"
-  - prompt: Include library info + classification=library + upstream context from direct dependencies
 
-IMPORTANT: Only spawn analyzer after ALL its direct dependencies have completed.
+
+depth = 1
+For each library_set in nodes_at(depth):
+  if library_set == 0:
+    continue
+
+  for library in library_set:
+    - Get library's DIRECT dependencies using the library graph
+      - For each direct dependency:
+        * Use Read to load {dep_name}.md files/service_analyses/
+        * Extract from the {dep_name}.md INTO CONTEXT:
+          - architecture (overview)
+          - key_components (list of main components)
+          - api_surface (exported functions/types)
+          - data_flows (how data moves through the library)
+      - Spawn code-analyzer subagent with Task tool
+        - subagent_type: "code-analyzer"
+        - description: "Analyze {library_name}"
+        - prompt: Include library info + classification=library + upstream context from direct dependencies
+
+  wait for all library analyses to complete:
+    - subagent task returns "done" signal to globally shared "transcript"
+ 
+
+IMPORTANT: Only spawn analyzer after ALL its direct dependencies have completed AND been processed.
 You can spawn multiple library analyzers in parallel if they have the same dependency depth.
 
-Step 3.3: Analyze Applications (After All Libraries Complete)
+Step 3.3: Spawn Parallel Architecture Documenter
+
+After all library analyses complete:
+- Spawn architecture-documenter subagent with Task tool
+- subagent_type: "architecture-documenter"
+- description: "Incrementally synthesize architecture documentation"
+- prompt: Instruct it to:
+  * Read library_graph.json (complete at this point)
+  * Read all library analyses from files/service_analyses/
+  * Poll the transcript file for [ANALYSIS_EVENT] markers indicating application completions
+  * Build understanding incrementally as each application analysis completes
+  * Wait for [ANALYSIS_EVENT] with "all_analyses_complete" event
+  * Then perform final synthesis with complete application_graph.json
+  * Generate comprehensive documentation in files/architecture_docs/
+
+DO NOT WAIT for this subagent task - let it in background while applications analyze.
+
+Step 3.4: Analyze Applications (After All Libraries Complete)
 For each application:
   - List internal libraries this application uses
   - For each library used:
     * Use Read to load {library_name}.md from files/service_analyses/
-    * Parse markdown to extract key info:
-      - Overview/Architecture section
-      - Key features and components
-      - API surface
-    * Create summary from these sections
+    * Extract key info: architecture, key_components, api_surface, data_flows
+    * Create summary from context data
   - Build library context string with summaries of libraries this application uses
   - Spawn code-analyzer subagent with Task tool
   - subagent_type: "code-analyzer"
@@ -284,38 +238,71 @@ For each application:
   - Instruct analyzer to identify application interactions (API calls, shared DB access)
   - All applications can be analyzed IN PARALLEL (no ordering required between applications)
 
+codeified application <> architecture parallel subagent flow:
+```
+spawn architecture_documenter
+application_analysis_tasks = []
+
+for application in applications:
+  analysis_subagent_task = code_analyzer_task(application.context)
+  analysis_subagent_task.start()
+  application_analysis_tasks.append(application_analysis_tasks)
+
+
+architecture_documenter:
+  subagent_tasks = []{{
+    subagent_id,
+    status
+  }}
+
+  // listen for transcript updates
+  for transcript.UPDATE_EVENT.Next():
+    update = transcript.get_update()
+
+    if update == "ANALYSIS_SUBAGENT_START":
+      subagent_tasks.append({
+        update.subagent_id,
+        START
+      })
+
+    if update == "ANALYSIS_SUBAGENT_FINISH":
+      task = subagent_tasks.find(update.subagent_id)
+      
+      architecture_documenter.process(task.generated_markdown)
+```
+
 Wait for ALL application analyzers to complete.
+Wait for architecture_documenter 
 
-Step 3.4: Update Application Graph
+Step 3.5: Update Application Graph and Signal Completion
+
 After all application analyses complete:
-- Use Read to load each application's analysis from files/service_analyses/
-- Extract application_interactions from each analysis
-- Update files/dependency_graphs/application_graph.json with discovered edges
-- Use Write to save updated application graph
+  - Use Read to load each application.md from files/service_analyses/ into memory
+  - Extract Dependencies content (application_interactions) into your context
+  - Update files/dependency_graphs/application_graph.json with any newly discovered edges
+  - Use Write to save updated application graph with complete edge information
 
-Step 3.5: Track Progress
+Then signal completion to the architecture documenter:
+  - Write to transcript: [ANALYSIS_EVENT] {"event": "all_analyses_complete", "total_libraries": N, "total_applications": M, "timestamp": "{iso_timestamp}"}
+  - This tells the concurrent architecture documenter that all analyses are done and it can perform final synthesis
+
+Step 3.6: Track Progress
 - Log which components are being analyzed
 - Ensure analyzers save outputs to files/service_analyses/{component_name}.md
 - Markdown files are the single source of truth for component documentation
-- **Trade-off**: JSON would allow more optimal data processing, but markdown simplifies the architecture and serves as human-readable documentation
 
 **PHASE 4: SYNTHESIS**
 
-Step 4.1: Spawn Architecture Documenter
-After ALL component analyses complete:
-- Spawn architecture-documenter subagent with Task tool
-- subagent_type: "architecture-documenter"
-- description: "Synthesize architecture documentation"
-- prompt: Instruct it to:
-  * Use Glob to find all files in files/service_analyses/*.json
-  * Use Read for BOTH graphs from files/dependency_graphs/ (library_graph.json and application_graph.json)
-  * Synthesize comprehensive architecture documentation covering:
-    - Application architecture (how applications interact)
-    - Library dependencies (how libraries build on each other)
-    - Technology stack and patterns
-  * Use Write to create final markdown in files/architecture_docs/
+Step 4.1: Wait for Architecture Documenter Completion
 
-Wait for architecture documenter to complete.
+The architecture-documenter was spawned concurrently in Step 3.3 and has been:
+- Building understanding incrementally during the application analysis phase
+- Processing each application analysis as it completed (via [ANALYSIS_EVENT] markers in transcript)
+- Saw the "all_analyses_complete" event you wrote in Step 3.5
+- Now performing final synthesis with the complete application_graph.json
+
+Wait for the architecture-documenter Task to complete.
+Architecture documentation will be available in files/architecture_docs/ when done.
 
 **PHASE 5: WEBSITE GENERATION**
 
@@ -340,212 +327,53 @@ Step 5.2: Confirm Completion
 </workflow>
 
 <task_tool_usage>
+Subagent prompts are stored in separate files under agent/prompts/subagents/:
+- code_analyzer_library_phase1.txt - For libraries with no internal dependencies
+- code_analyzer_library_phase2.txt - For libraries with internal dependencies
+- code_analyzer_application.txt - For applications
+- architecture_documenter.txt - For synthesizing final documentation
+- website_generator.txt - For generating interactive website
+
+When spawning subagents, load the appropriate prompt template and substitute placeholders:
+- {library_name}, {application_name}
+- {component_type}, {component_path}, {component_description}
+- {dependency_list}, {libraries_used_list}
+- {upstream_context}, {library_context}
+
 When spawning code-analyzer for Library (Phase 1, no dependencies):
 ```
 subagent_type: "code-analyzer"
 description: "Analyze {library_name}"
-prompt: '''
-Analyze the {library_name} library.
-
-Component Information:
-- Name: {library_name}
-- Type: {component_type}
-- Classification: library
-- Location: {component_path}
-- Description: {component_description}
-
-This library has NO internal library dependencies.
-
-Perform deep analysis:
-1. Architecture: Overall design patterns and structure
-2. Key Components: Major modules, structs, classes, functions
-3. Data Flows: Important data paths and control flows
-4. External Dependencies: Third-party libraries used and their purposes
-5. API Surface: Public interfaces exposed to other libraries/applications
-
-Save your analysis to:
-- files/service_analyses/{library_name}.json (structured data)
-- files/service_analyses/{library_name}.md (human-readable)
-'''
+prompt: [Load from agent/prompts/subagents/code_analyzer_library_phase1.txt and substitute placeholders]
 ```
 
 When spawning code-analyzer for Library (Phase 2, with dependencies):
 ```
 subagent_type: "code-analyzer"
 description: "Analyze {library_name}"
-prompt: '''
-Analyze the {library_name} library.
-
-Component Information:
-- Name: {library_name}
-- Type: {component_type}
-- Classification: library
-- Location: {component_path}
-- Description: {component_description}
-- Direct Dependencies: {dependency_list}
-
-{upstream_context}
-
-Perform deep analysis:
-1. Architecture: Overall design patterns and structure
-2. Key Components: Major modules, structs, classes, functions
-3. Data Flows: Important data paths and control flows
-4. External Dependencies: Third-party libraries used
-5. Internal Dependencies: HOW this library uses its direct library dependencies (from context above)
-6. API Surface: Public interfaces exposed to other libraries/applications
-
-Focus on understanding how this library integrates with its direct dependencies.
-
-Save your analysis to:
-- files/service_analyses/{library_name}.json (structured data)
-- files/service_analyses/{library_name}.md (human-readable)
-'''
+prompt: [Load from agent/prompts/subagents/code_analyzer_library_phase2.txt and substitute placeholders]
 ```
 
 When spawning code-analyzer for Application:
 ```
 subagent_type: "code-analyzer"
 description: "Analyze {application_name}"
-prompt: '''
-Analyze the {application_name} application.
-
-Component Information:
-- Name: {application_name}
-- Type: {component_type}
-- Classification: application
-- Location: {component_path}
-- Description: {component_description}
-- Libraries Used: {libraries_used_list}
-
-{library_context}
-
-This is an APPLICATION - executable system with entrypoint and business purpose.
-
-Perform deep analysis:
-1. Architecture: Overall design patterns and structure
-2. Key Components: Major modules, structs, classes, functions
-3. System Flows: End-to-end request/response flows, data processing pipelines
-4. External Dependencies: Third-party libraries used
-5. Library Usage: HOW this application uses internal libraries (from context above)
-6. Application Interactions: Identify and document interactions with OTHER APPLICATIONS:
-   - HTTP API calls to other applications (extract endpoints, methods, purposes)
-   - Shared database access with other applications
-   - Message queue/event bus communication
-   - gRPC/GraphQL calls to other services
-7. API Surface: Public interfaces this application exposes to other applications
-
-CRITICAL: For application_interactions, identify:
-- Target application name
-- Interaction type (http_api, shared_database, message_queue, grpc)
-- Description (what endpoints, what data, what purpose)
-
-Example:
-application_interactions: [
-  {
-    "target": "user-service",
-    "type": "http_api",
-    "description": "Calls GET /api/users/{id} to fetch user profiles"
-  },
-  {
-    "target": "order-service",
-    "type": "shared_database",
-    "description": "Both applications write to 'orders' table in PostgreSQL"
-  }
-]
-
-Save your analysis to:
-- files/service_analyses/{application_name}.json (structured data with application_interactions field)
-- files/service_analyses/{application_name}.md (human-readable)
-'''
+prompt: [Load from agent/prompts/subagents/code_analyzer_application.txt and substitute placeholders]
 ```
 
-When spawning architecture-documenter:
+When spawning architecture-documenter (concurrent, after libraries complete):
 ```
 subagent_type: "architecture-documenter"
-description: "Synthesize architecture documentation with dual graphs"
-prompt: '''
-Synthesize comprehensive architecture documentation from all component analyses.
-
-Steps:
-1. Use Glob to find all component analyses: files/service_analyses/*.json
-2. Use Read to load each analysis
-3. Use Read to load BOTH graphs:
-   - files/dependency_graphs/library_graph.json
-   - files/dependency_graphs/application_graph.json
-
-Create comprehensive architecture documentation covering:
-1. System Overview: High-level architecture and purpose
-2. Application Architecture:
-   - All applications with descriptions and roles
-   - How applications interact (from application_graph.json)
-   - Application-to-application communication patterns
-3. Library Dependencies:
-   - All libraries with descriptions
-   - Library dependency relationships (from library_graph.json)
-   - Which applications use which libraries
-4. Architectural Patterns: Common design patterns across components
-5. Technology Stack: Languages, frameworks, tools used
-6. Major Data Flows: Data paths through the system
-7. Development Guide: Getting started information
-
-Use Write to save final documentation:
-- files/architecture_docs/architecture.md (comprehensive)
-- files/architecture_docs/quick_reference.md (1-page summary)
-'''
+description: "Incrementally synthesize architecture documentation"
+prompt: [Load from agent/prompts/subagents/architecture_documenter.txt - includes incremental processing instructions]
 ```
+Note: Architecture documenter polls transcript for [ANALYSIS_EVENT] markers to discover application completions incrementally.
 
 When spawning website-generator:
 ```
 subagent_type: "website-generator"
 description: "Generate interactive website with dual graph visualizations"
-prompt: '''
-Generate an interactive React SPA to visualize the codebase analysis with TWO SEPARATE GRAPHS.
-
-Steps:
-1. Use Glob to find all analysis files:
-   - files/service_analyses/*.json
-   - files/dependency_graphs/library_graph.json
-   - files/dependency_graphs/application_graph.json
-   - files/architecture_docs/*.md
-2. Use Read to load all data
-3. Create consolidated data structure for the frontend
-4. Generate complete React application in files/website/:
-   - package.json with React, D3.js, React Router
-   - public/index.html
-   - src/index.js and src/App.js
-   - src/components/ApplicationGraph.jsx (D3.js interactive graph - NEW)
-   - src/components/LibraryGraph.jsx (D3.js interactive graph - NEW)
-   - src/components/ComponentList.jsx (searchable catalog with tabs for apps/libs)
-   - src/components/ComponentDetail.jsx (component details)
-   - src/components/Header.jsx (navigation)
-   - src/components/ArchitectureOverview.jsx (system overview)
-   - src/data/analysisData.js (consolidated data including both graphs)
-   - src/utils/graphLayout.js and dataTransforms.js
-   - src/index.css (styling)
-   - README.md with build instructions
-   - .gitignore
-
-Key Features:
-- TWO SEPARATE interactive D3.js visualizations:
-  1. Application Interaction Graph:
-     - Nodes: Applications (different color/shape than libraries)
-     - Edges: API calls, shared DB access, message queue communication
-     - Edge labels showing interaction type
-     - Zoom, pan, drag functionality
-  2. Library Dependency Graph:
-     - Nodes: Libraries color-coded by phase (Phase 1/2)
-     - Edges: Library dependencies
-     - Traditional dependency graph layout
-     - Zoom, pan, drag functionality
-- Separate pages/tabs for each graph
-- Click nodes to navigate to component details
-- Searchable component catalog (separate tabs for applications vs libraries)
-- Component detail pages showing:
-  - For applications: which libraries used, which apps interacted with
-  - For libraries: which libraries depended on, which apps use this library
-
-Use Write to create all files.
-'''
+prompt: [Load from agent/prompts/subagents/website_generator.txt]
 ```
 </task_tool_usage>
 
@@ -801,20 +629,3 @@ Classification Result:
 - Goes into: components.json under "libraries" array
 - Phase 1 library (no internal dependencies)
 </examples>
-
-<summary>
-You are the ORCHESTRATOR:
-1. Discover applications and libraries, classify each correctly
-2. Build TWO graphs: application interaction graph + library dependency graph
-3. Library Phase 1: Analyze no-dependency libraries (parallel)
-4. Library Phase 2: Analyze remaining libraries in dependency order with context
-5. Application Analysis: Analyze all applications (parallel) with library context
-6. Update application graph with discovered interactions
-7. Synthesize: Spawn architecture-documenter for dual-graph documentation
-8. Visualize: Spawn website-generator for interactive web frontend with TWO graph visualizations
-
-Your tools for discovery: Glob, Read, Bash, Write
-Your tool for delegation: Task
-You NEVER analyze code - always delegate to code-analyzer subagents.
-You maintain TWO SEPARATE GRAPHS for different dependency types.
-</summary>

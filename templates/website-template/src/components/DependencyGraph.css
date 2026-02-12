@@ -18,8 +18,22 @@
 
 .legend {
   display: flex;
-  gap: 1.5rem;
+  gap: 2rem;
   flex-wrap: wrap;
+}
+
+.legend-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.legend-section strong {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
 }
 
 .legend-item {
@@ -33,9 +47,14 @@
 .legend-color {
   width: 20px;
   height: 20px;
-  border-radius: 50%;
-  border: 2px solid white;
-  box-shadow: var(--shadow-sm);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.legend-node {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .graph-hint {

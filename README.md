@@ -104,6 +104,32 @@ Then provide a path to analyze:
 You: Analyze the codebase at /path/to/repo
 ```
 
+### Verbose Logging
+
+Enable detailed SDK and API interaction logging:
+
+```bash
+# Verbose mode - Shows API calls, agent spawning, and tool usage
+AGENT_VERBOSE=true python -m github_flashlight.agent
+
+# Debug mode - Full trace logging including API request/response details
+AGENT_DEBUG=true python -m github_flashlight.agent
+```
+
+When enabled, you'll see real-time information about:
+- 📤 API requests to Claude
+- 📥 API responses
+- 🚀 Subagent spawning and lifecycle
+- 🔧 Tool calls with parameters
+- ✅ Tool results and success/failure status
+- 📝 Agent context and model information
+
+This is useful for:
+- Understanding what the agents are doing in real-time
+- Debugging analysis pipeline issues
+- Monitoring API usage and performance
+- Learning how the multi-agent system orchestrates tasks
+
 The pipeline will:
 1. Scan for services (Cargo.toml, go.mod, package.json, pyproject.toml files)
 2. Build dependency graph

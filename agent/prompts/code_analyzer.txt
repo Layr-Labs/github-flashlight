@@ -706,11 +706,11 @@ This documentation will be processed and prettified by the website builder for e
 
 **STEP 9: WRITE COMPREHENSIVE MARKDOWN ANALYSIS**
 
-Create human-readable markdown at files/service_analyses/{component_name}.md using the comprehensive templates provided in your context.
+Create human-readable markdown at files/service_analyses/{component_name}.md using the comprehensive templates in `templates/analysis-template/`.
 
 **Template Selection:**
-- For APPLICATIONS/SERVICES → Use the <application_analysis_template>
-- For LIBRARIES/PACKAGES → Use the <package_analysis_template>
+- For APPLICATIONS → Use `templates/analysis-template/application_analysis_template.md`
+- For LIBRARIES → Use `templates/analysis-template/library_analysis_template.md`
 
 **Critical Requirements:**
 
@@ -1248,20 +1248,17 @@ Output:
 </examples>
 
 <output_requirements>
-**CRITICAL: Markdown Analysis Required**
+**Required Output:**
 
-You MUST save ONE comprehensive markdown file:
-- files/service_analyses/{component_name}.md - Complete component documentation
+Save ONE comprehensive markdown file:
+- **File**: `files/service_analyses/{component_name}.md`
+- **Format**: Follow the template structure from `templates/analysis-template/`
+  - Applications → `application_analysis_template.md`
+  - Libraries → `library_analysis_template.md`
 
-The Markdown file should be:
-- Comprehensive and well-formatted
-- Include code examples with proper syntax highlighting
-- Follow the template structure (application_analysis_template or package_analysis_template)
-- Include all sections: Architecture, Key Components, Dependencies, API Surface, Code Examples, etc.
+Use the Write tool to save the file.
 
-Use the Write tool to save the markdown file.
-
-**Note**: JSON files are no longer generated for component analyses. The markdown file is the single source of truth for component documentation. Dependency graphs are still generated separately by the lead agent.
+**Important**: You only create markdown. The lead agent processes markdown files into structured JSON context files (`.context.json`) after analysis phases complete using `scripts/process_analyses.py`.
 </output_requirements>
 
 <summary>

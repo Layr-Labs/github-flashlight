@@ -1,128 +1,89 @@
-"""Dependency graph construction and manipulation."""
+"""Dependency graph builder utility."""
 
-from typing import List, Dict, Tuple
+from typing import List, Tuple, Dict
 from pathlib import Path
-import json
-
-from agent.schemas.service import Service
+from agent.schemas.service import Library, Application
 from agent.schemas.dependency_graph import DependencyGraph
 
 
 class DependencyGraphBuilder:
-    """Builds dependency graphs from discovered services."""
+    """Builds library dependency graphs from service definitions."""
 
-    def __init__(self, services: List[Service]):
-        self.services = {s.name: s for s in services}
+    def __init__(self, libraries: List[Library]):
+        """Initialize with list of libraries."""
+        self.services = {lib.name: lib for lib in libraries}
         self.graph = DependencyGraph()
+        self._build_graph()
+
+    def _build_graph(self):
+        """Build the library dependency graph."""
+        # Add all library nodes
+        for lib_name in self.services:
+            self.graph.add_node(lib_name)
+
+        # Add edges for internal library dependencies
+        for lib_name, lib in self.services.items():
+            for dep in lib.dependencies:
+                # Only add edge if dependency is an internal library
+                if dep in self.services:
+                    self.graph.add_edge(lib_name, dep)
 
     def build(self) -> DependencyGraph:
-        """
-        Build the dependency graph from services.
-
-        Returns:
-            Constructed dependency graph with analysis ordering available.
-        """
-        # Add all services as nodes
-        for service in self.services.values():
-            self.graph.add_node(service.name)
-
-        # Add edges based on dependencies
-        for service in self.services.values():
-            for dep_name in service.dependencies:
-                # Only add edge if dependency is an internal service
-                if dep_name in self.services:
-                    self.graph.add_edge(service.name, dep_name)
-
+        """Return the built dependency graph."""
         return self.graph
 
     def get_analysis_order(self) -> Tuple[List[str], List[str]]:
         """
-        Get the order in which services should be analyzed.
+        Get two-phase analysis order.
 
         Returns:
-            Tuple of (phase1_services, phase2_services_ordered)
-            - phase1: Services with no dependencies (can be analyzed in parallel)
-            - phase2: Remaining services in topological order
+            Tuple of (phase1_libraries, phase2_libraries_ordered)
         """
         return self.graph.get_analysis_order()
 
     def save_graph_visualization(self, output_path: Path):
-        """
-        Save a textual visualization of the dependency graph.
-        Creates both markdown and JSON versions.
-        """
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        """Save markdown visualization of the library graph."""
+        phase1, phase2 = self.get_analysis_order()
 
-        # Save markdown visualization
-        with open(output_path, "w") as f:
-            f.write("# Service Dependency Graph\n\n")
-
-            # Write services
-            f.write("## Services\n\n")
-            for node in sorted(self.graph.nodes):
-                service = self.services.get(node)
-                if service:
-                    f.write(f"- **{node}** ({service.type})\n")
-                    if service.description:
-                        f.write(f"  - Description: {service.description}\n")
-                    f.write(f"  - Path: {service.root_path}\n\n")
-
-            # Write dependencies
-            f.write("## Dependencies\n\n")
-            for node in sorted(self.graph.nodes):
-                deps = self.graph.get_direct_dependencies(node)
-                if deps:
-                    f.write(f"- **{node}** depends on:\n")
-                    for dep in sorted(deps):
-                        f.write(f"  - {dep}\n")
+        with open(output_path, 'w') as f:
+            f.write("# Library Dependency Graph\n\n")
+            f.write("## Phase 1: Foundation Libraries (No Dependencies)\n\n")
+            if phase1:
+                for lib_name in phase1:
+                    lib = self.services[lib_name]
+                    f.write(f"### `{lib_name}`\n\n")
+                    f.write(f"- **Type**: {lib.type}\n")
+                    f.write(f"- **Path**: `{lib.root_path}`\n")
+                    if lib.description:
+                        f.write(f"- **Description**: {lib.description}\n")
+                    f.write(f"- **Dependencies**: None\n")
+                    if lib.external_dependencies:
+                        ext = ', '.join(f"`{d}`" for d in lib.external_dependencies[:5])
+                        if len(lib.external_dependencies) > 5:
+                            ext += f" (+{len(lib.external_dependencies) - 5} more)"
+                        f.write(f"- **External Dependencies**: {ext}\n")
                     f.write("\n")
+            else:
+                f.write("*(None)*\n\n")
 
-            # Write analysis order
-            f.write("## Analysis Order\n\n")
-            phase1, phase2 = self.graph.get_analysis_order()
-
-            f.write("### Phase 1: Services with no dependencies (analyzed in parallel)\n\n")
-            for service in sorted(phase1):
-                f.write(f"- {service}\n")
-            f.write("\n")
-
-            f.write("### Phase 2: Remaining services (analyzed in dependency order)\n\n")
-            for i, service in enumerate(phase2, 1):
-                deps = self.graph.get_direct_dependencies(service)
-                f.write(f"{i}. **{service}**")
-                if deps:
-                    f.write(f" (depends on: {', '.join(sorted(deps))})")
-                f.write("\n")
-            f.write("\n")
-
-            # Write dependency graph visualization (simple text-based)
-            f.write("## Dependency Graph Visualization\n\n")
-            f.write("```\n")
-            phase1, phase2 = self.graph.get_analysis_order()
-
-            f.write("PHASE 1 (No Dependencies):\n")
-            for service in sorted(phase1):
-                f.write(f"  [{service}]\n")
-
-            f.write("\nPHASE 2 (Dependency Order):\n")
-            for service in phase2:
-                deps = self.graph.get_direct_dependencies(service)
-                f.write(f"  [{service}]")
-                if deps:
-                    f.write(f" ← depends on: {', '.join(sorted(deps))}")
-                f.write("\n")
-            f.write("```\n")
-
-        # Save JSON version
-        json_path = output_path.with_suffix(".json")
-        with open(json_path, "w") as f:
-            phase1, phase2 = self.graph.get_analysis_order()
-            json.dump(
-                {
-                    "graph": self.graph.to_dict(),
-                    "services": {name: svc.to_dict() for name, svc in self.services.items()},
-                    "analysis_order": {"phase1": phase1, "phase2": phase2},
-                },
-                f,
-                indent=2,
-            )
+            f.write("## Phase 2: Dependent Libraries (Topological Order)\n\n")
+            if phase2:
+                for lib_name in phase2:
+                    lib = self.services[lib_name]
+                    deps = self.graph.get_direct_dependencies(lib_name)
+                    f.write(f"### `{lib_name}`\n\n")
+                    f.write(f"- **Type**: {lib.type}\n")
+                    f.write(f"- **Path**: `{lib.root_path}`\n")
+                    if lib.description:
+                        f.write(f"- **Description**: {lib.description}\n")
+                    if deps:
+                        dep_list = ', '.join(f"`{d}`" for d in deps)
+                        f.write(f"- **Depends On**: {dep_list}\n")
+                    if lib.external_dependencies:
+                        ext = ', '.join(f"`{d}`" for d in lib.external_dependencies[:5])
+                        if len(lib.external_dependencies) > 5:
+                            ext += f" (+{len(lib.external_dependencies) - 5} more)"
+                        f.write(f"- **External Dependencies**: {ext}\n")
+                    f.write("\n")
+            else:
+                f.write("*(None)*\n\n")

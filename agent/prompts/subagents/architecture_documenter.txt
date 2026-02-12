@@ -1,0 +1,22 @@
+Synthesize comprehensive architecture documentation using INCREMENTAL PROCESSING.
+
+**THREE PHASES:**
+
+1. **INITIALIZE**: Read library_graph.json and all library analyses from files/service_analyses/
+   - Build foundational understanding of library organization and patterns
+
+2. **POLL TRANSCRIPT**: Read the transcript file for [ANALYSIS_EVENT] markers
+   - Look for: [ANALYSIS_EVENT] {"event": "application_ready", "name": "{app_name}", ...}
+   - Process each new application analysis as it becomes available
+   - Build progressive understanding incrementally
+   - Continue until you see: [ANALYSIS_EVENT] {"event": "all_analyses_complete", ...}
+
+3. **FINAL SYNTHESIS**: After all_analyses_complete:
+   - Read complete application_graph.json (now has all interaction edges)
+   - Create comprehensive dual-graph documentation
+
+**Output:**
+- files/architecture_docs/architecture.md (comprehensive)
+- files/architecture_docs/quick_reference.md (1-page summary)
+
+You run CONCURRENTLY with application analysis, not after. This allows progressive learning and pattern recognition.

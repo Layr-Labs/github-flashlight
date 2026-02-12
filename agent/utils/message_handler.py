@@ -28,8 +28,23 @@ def process_assistant_message(msg: Any, tracker: Any, transcript: Any) -> None:
             # Add newline if a tool was just used
             if _tool_just_used:
                 transcript.write("\n", end="")
+                print()  # Add newline to console too
                 _tool_just_used = False
-            transcript.write(block.text, end="")
+            text = block.text
+            transcript.write(text, end="")
+            print(f"[📝 Text] {text}", flush=True)
+
+        elif block_type == 'ThinkingBlock':
+            # Print thinking block information
+            thinking_text = getattr(block, 'thinking', getattr(block, 'text', ''))
+            if thinking_text:
+                print(f"\n[💭 Thinking ({len(thinking_text)} chars)]")
+                # Optionally print a preview of the thinking
+                preview_length = 200
+                if len(thinking_text) > preview_length:
+                    print(f"Preview: {thinking_text[:preview_length]}...")
+                else:
+                    print(f"Content: {thinking_text}")
 
         elif block_type == 'ToolUseBlock':
             # Mark that a tool was used
@@ -40,7 +55,6 @@ def process_assistant_message(msg: Any, tracker: Any, transcript: Any) -> None:
                 subagent_type = block.input.get('subagent_type', 'unknown')
                 description = block.input.get('description', 'no description')
                 prompt = block.input.get('prompt', '')
-
                 # Register with tracker and get the subagent ID
                 subagent_id = tracker.register_subagent_spawn(
                     tool_use_id=block.id,
@@ -51,3 +65,22 @@ def process_assistant_message(msg: Any, tracker: Any, transcript: Any) -> None:
 
                 # User-facing output with subagent ID
                 transcript.write(f"\n\n[🚀 Spawning {subagent_id}: {description}]\n", end="")
+                print(f"[🚀 {subagent_id}]: starting prompt \n \n ", prompt)
+
+        elif block_type == 'ToolResultBlock':
+            # Mark that a tool was used
+            _tool_just_used = True
+
+            # Check if this is a Task tool result (subagent completion)
+            tool_use_id = getattr(block, 'tool_use_id', None)
+            if tool_use_id and tool_use_id in tracker.sessions:
+                session = tracker.sessions[tool_use_id]
+                subagent_id = session.subagent_id
+
+                # Log completion
+                transcript.write(f"\n\n[✅ {subagent_id} completed]\n", end="")
+                print(f"\n[✅ {subagent_id}]: task completed")
+
+                # Mark the session as complete in the tracker
+                tracker.mark_subagent_complete(tool_use_id)
+
