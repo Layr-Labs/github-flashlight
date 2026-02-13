@@ -55,6 +55,7 @@ def process_assistant_message(msg: Any, tracker: Any, transcript: Any) -> None:
                 subagent_type = block.input.get('subagent_type', 'unknown')
                 description = block.input.get('description', 'no description')
                 prompt = block.input.get('prompt', '')
+
                 # Register with tracker and get the subagent ID
                 subagent_id = tracker.register_subagent_spawn(
                     tool_use_id=block.id,
@@ -62,7 +63,6 @@ def process_assistant_message(msg: Any, tracker: Any, transcript: Any) -> None:
                     description=description,
                     prompt=prompt
                 )
-
                 # User-facing output with subagent ID
                 transcript.write(f"\n\n[🚀 Spawning {subagent_id}: {description}]\n", end="")
                 print(f"[🚀 {subagent_id}]: starting prompt \n \n ", prompt)
@@ -77,10 +77,8 @@ def process_assistant_message(msg: Any, tracker: Any, transcript: Any) -> None:
                 session = tracker.sessions[tool_use_id]
                 subagent_id = session.subagent_id
 
-                # Log completion
-                transcript.write(f"\n\n[✅ {subagent_id} completed]\n", end="")
+                # Log completion to transcript (UI concern)
+                # Note: State management (counters, events) handled by SubagentStop hook
+                transcript.write(f"\n\n[✅ {session.subagent_type} completed: {session.description}]\n", end="")
                 print(f"\n[✅ {subagent_id}]: task completed")
-
-                # Mark the session as complete in the tracker
-                tracker.mark_subagent_complete(tool_use_id)
 

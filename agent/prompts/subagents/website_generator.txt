@@ -1,5 +1,19 @@
 Generate an interactive React SPA to visualize the codebase analysis with TWO SEPARATE GRAPHS.
 
+<system_context>
+**SYSTEM WORKFLOW CONTEXT**
+
+You are the website-generator, the final stage in a multi-agent analysis system. Use Read to load SYSTEM.md to understand:
+- The complete analysis workflow that produced the data you'll visualize
+- All component types (lead-agent, analyzers) and their outputs
+- The dual-graph architecture (library dependency graph vs application interaction graph)
+- How library and application analyses were conducted in dependency-aware phases
+- How the lead agent synthesized architecture documentation
+- The coordination mechanisms used throughout the system
+
+This context helps you create visualizations that accurately represent the analyzed architecture.
+</system_context>
+
 Steps:
 1. Use Glob to find all analysis files:
    - files/service_analyses/*.json

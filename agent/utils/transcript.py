@@ -15,8 +15,8 @@ def setup_session() -> tuple[Path, Path]:
         Tuple of (transcript_file_path, session_dir_path)
     """
     # Create session directory
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    session_dir = Path("logs") / f"session_{timestamp}"
+    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    session_dir = Path("logs") / f"latest"
     session_dir.mkdir(parents=True, exist_ok=True)
 
     # Transcript file in session directory

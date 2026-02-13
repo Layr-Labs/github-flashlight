@@ -58,7 +58,6 @@ async def chat():
     # Load prompts
     lead_agent_prompt = load_prompt("lead_agent.txt")
     base_code_analyzer_prompt = load_prompt("code_analyzer.txt")
-    architecture_documenter_prompt = load_prompt("architecture_documenter.txt")
     website_generator_prompt = load_prompt("website_generator.txt")
 
     # Load analysis templates and enhance code analyzer prompt
@@ -92,34 +91,33 @@ async def chat():
 
     # Define specialized subagents
     agents = {
-        "code-analyzer": AgentDefinition(
+        "code-library-analyzer": AgentDefinition(
             description=(
-                "Use this agent to perform deep analysis of a specific service. "
+                "Use this agent to perform deep analysis of a specific library code component. "
                 "The code-analyzer uses Glob, Grep, Read, and Bash to explore code structure, "
                 "identify key components, trace data flows, and document architecture. "
-                "Receives upstream dependency context when analyzing services with dependencies. "
-                "Produces structured analysis reports in both JSON and Markdown formats "
+                "Receives upstream dependency context when analyzing library components with dependencies. "
+                "Produces structured analysis reports in just Markdown formats "
                 "in files/{project_name}/service_analyses/. "
-                "Each service should get its own code-analyzer instance."
+                "Each library should get its own code-library-analyzer instance."
             ),
             tools=["Glob", "Grep", "Read", "Bash", "Write"],
             prompt=code_analyzer_prompt,
             model="sonnet"  # Use sonnet for complex code analysis
         ),
-        "architecture-documenter": AgentDefinition(
+        "application-analyzer": AgentDefinition(
             description=(
-                "Use this agent to incrementally synthesize architecture documentation. "
-                "SPAWN CONCURRENTLY after library analysis completes (Step 3.3 in lead agent workflow). "
-                "The architecture-documenter reads library_graph.json and library analyses immediately, "
-                "then polls the transcript file for [ANALYSIS_EVENT] markers to discover application completions incrementally. "
-                "It builds understanding progressively as applications complete (Phase 2), "
-                "performs final synthesis when all_analyses_complete signal received (Phase 3), "
-                "and creates comprehensive dual-graph documentation in files/{project_name}/architecture_docs/. "
-                "DO NOT wait for this agent - it runs in parallel with application analysis for ~24% performance improvement."
+                "Use this agent to perform deep analysis of an application code component. "
+                "The code-analyzer uses Glob, Grep, Read, and Bash to explore code structure, "
+                "identify key components, trace data flows, and document architecture. "
+                "Receives upstream dependency context when analyzing library components with dependencies. "
+                "Produces structured analysis reports in just Markdown formats "
+                "in files/{project_name}/service_analyses/. "
+                "Each application should get its own application-analyzer instance."
             ),
-            tools=["Glob", "Read", "Write"],
-            prompt=architecture_documenter_prompt,
-            model="sonnet"  # Use sonnet for comprehensive synthesis; consider opus for higher quality
+            tools=["Glob", "Grep", "Read", "Bash", "Write"],
+            prompt=code_analyzer_prompt,
+            model="sonnet"  # Use sonnet for complex code analysis
         ),
         "website-generator": AgentDefinition(
             description=(
@@ -136,7 +134,9 @@ async def chat():
         )
     }
 
-    # Set up hooks for tracking
+    # Set up hooks for tracking subagent states
+    # and lifecycle movements
+    # 
     hooks = {
         'PreToolUse': [
             HookMatcher(
@@ -148,6 +148,12 @@ async def chat():
             HookMatcher(
                 matcher=None,  # Match all tools
                 hooks=[tracker.post_tool_use_hook]
+            )
+        ],
+        'SubagentStop': [
+            HookMatcher(
+                matcher=None,  # Match all tools
+                hooks=[tracker.post_tool_result_hook]
             )
         ]
     }

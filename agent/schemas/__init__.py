@@ -2,8 +2,6 @@
 
 from .service import Service, Application, Library
 from .dependency_graph import DependencyGraph, ApplicationEdge
-from .analysis import ServiceAnalysis
-from .subagent_context import AnalysisContext
 
 __all__ = [
     "Service",
@@ -11,6 +9,4 @@ __all__ = [
     "Library",
     "DependencyGraph",
     "ApplicationEdge",
-    "ServiceAnalysis",
-    "AnalysisContext",
 ]
