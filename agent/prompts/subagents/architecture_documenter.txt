@@ -1,0 +1,42 @@
+Synthesize comprehensive architecture documentation from completed analyses.
+
+You run AFTER all library and application analyses have completed.
+
+Steps:
+
+1. **Load all data:**
+   - Use Glob to find /tmp/{SERVICE_NAME}/service_analyses/*.md
+   - Use Read on /tmp/{SERVICE_NAME}/service_discovery/components.json
+   - Use Read on /tmp/{SERVICE_NAME}/dependency_graphs/library_graph.json
+   - Use Read on /tmp/{SERVICE_NAME}/dependency_graphs/application_graph.json
+   - Use Read to load all analysis files
+
+2. **Update application graph with relationships:**
+   - Extract application_interactions from each application analysis (Dependencies section)
+   - Update /tmp/{SERVICE_NAME}/dependency_graphs/application_graph.json with interaction edges
+   - Use Write to save updated application graph
+
+3. **Enrich components.json with third-party integrations:**
+   - Extract third_party_applications from application analyses (external services like AWS, Stripe, etc.)
+   - Update components.json to add/enrich third_party_applications field for each application
+   - Use Write to save enriched components.json
+
+4. **Load documentation templates:**
+   - Use Read on templates/architecture_template.md
+   - Use Read on templates/quick_reference_template.md
+
+5. **Synthesize documentation:**
+   - Fill in template placeholders with data from analyses, graphs, and enriched metadata
+   - Use Write to create /tmp/{SERVICE_NAME}/architecture_docs/architecture.md (comprehensive)
+   - Use Write to create /tmp/{SERVICE_NAME}/architecture_docs/quick_reference.md (summary)
+
+Focus on:
+- System purpose and organization
+- All components with their relationships
+- Both dependency graphs
+- Architectural patterns
+- Technology stack
+- Major data flows with mermaid diagrams
+- Third-party integrations
+- Development guidance
+- Recommendations

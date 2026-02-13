@@ -58,6 +58,7 @@ async def chat():
     # Load prompts
     lead_agent_prompt = load_prompt("lead_agent.txt")
     base_code_analyzer_prompt = load_prompt("code_analyzer.txt")
+    architecture_documenter_prompt = load_prompt("subagents/architecture_documenter.txt")
     website_generator_prompt = load_prompt("website_generator.txt")
 
     # Load analysis templates and enhance code analyzer prompt
@@ -97,8 +98,8 @@ async def chat():
                 "The code-analyzer uses Glob, Grep, Read, and Bash to explore code structure, "
                 "identify key components, trace data flows, and document architecture. "
                 "Receives upstream dependency context when analyzing library components with dependencies. "
-                "Produces structured analysis reports in just Markdown formats "
-                "in files/{project_name}/service_analyses/. "
+                "Produces structured analysis reports in Markdown format "
+                "in /tmp/{SERVICE_NAME}/service_analyses/. "
                 "Each library should get its own code-library-analyzer instance."
             ),
             tools=["Glob", "Grep", "Read", "Bash", "Write"],
@@ -111,20 +112,29 @@ async def chat():
                 "The code-analyzer uses Glob, Grep, Read, and Bash to explore code structure, "
                 "identify key components, trace data flows, and document architecture. "
                 "Receives upstream dependency context when analyzing library components with dependencies. "
-                "Produces structured analysis reports in just Markdown formats "
-                "in files/{project_name}/service_analyses/. "
+                "Produces structured analysis reports in Markdown format "
+                "in /tmp/{SERVICE_NAME}/service_analyses/. "
                 "Each application should get its own application-analyzer instance."
             ),
             tools=["Glob", "Grep", "Read", "Bash", "Write"],
             prompt=code_analyzer_prompt,
             model="sonnet"  # Use sonnet for complex code analysis
         ),
+        "architecture-documenter": AgentDefinition(
+            description=(
+                "Use this agent AFTER all application analyses complete to synthesize architecture documentation. "
+                "Runs once after analysis phase, reads all completed analyses and graphs, creates comprehensive docs."
+            ),
+            tools=["Glob", "Read", "Write"],
+            prompt=architecture_documenter_prompt,
+            model="sonnet"  # Use sonnet for comprehensive synthesis
+        ),
         "website-generator": AgentDefinition(
             description=(
                 "Use this agent AFTER architecture documentation is complete to generate a web frontend. "
                 "The website-generator reads all service analyses, dependency graphs, and architecture docs "
-                "from files/{project_name}/, then creates a complete React SPA with D3.js interactive "
-                "dependency graph visualization in files/{project_name}/website/. Generates all necessary "
+                "from /tmp/{SERVICE_NAME}/, then creates a complete React SPA with D3.js interactive "
+                "dependency graph visualization in /tmp/{SERVICE_NAME}/website/. Generates all necessary "
                 "files: package.json, components, styles, and build instructions. Spawn this agent once "
                 "at the very end to create the interactive website."
             ),
@@ -196,7 +206,7 @@ async def chat():
 
                 # Write user input to transcript (file only, not console)
                 transcript.write_to_file(f"\nYou: {user_input}\n")
-
+                
                 await client.query(prompt=user_input)
 
                 transcript.write("\nAgent: ", end="")

@@ -713,13 +713,13 @@ Example Response (200 OK):
 
 **Add to Analysis Output:**
 
-In the service's Markdown file (files/service_analyses/{service_name}.md), include this API Surface section after the "Key Components" section and before "Dependencies".
+In the service's Markdown file (/tmp/{SERVICE_NAME}/service_analyses/{service_name}.md), include this API Surface section after the "Key Components" section and before "Dependencies".
 
 This documentation will be processed and prettified by the website builder for easy browsing.
 
 **STEP 9: WRITE COMPREHENSIVE MARKDOWN ANALYSIS**
 
-Create human-readable markdown at files/service_analyses/{component_name}.md using the comprehensive templates in `templates/analysis-template/`.
+Create human-readable markdown at /tmp/{SERVICE_NAME}/service_analyses/{component_name}.md using the comprehensive templates in `templates/analysis-template/`.
 
 **Template Selection:**
 - For APPLICATIONS → Use `templates/analysis-template/application_analysis_template.md`
@@ -1178,7 +1178,7 @@ Analysis Process:
 8. Grep "database_layer" → Used in src/auth.rs for credential lookup
 9. Grep "^pub " → Find public API surface
 
-Output JSON (files/service_analyses/auth-service.json):
+Output JSON (/tmp/{SERVICE_NAME}/service_analyses/auth-service.json):
 ```json
 {
   "service_name": "auth-service",
@@ -1264,7 +1264,7 @@ Output:
 **Required Output:**
 
 Save ONE comprehensive markdown file:
-- **File**: `files/service_analyses/{component_name}.md`
+- **File**: `/tmp/{SERVICE_NAME}/service_analyses/{component_name}.md`
 - **Format**: Follow the template structure from `templates/analysis-template/`
   - Applications → `application_analysis_template.md`
   - Libraries → `library_analysis_template.md`

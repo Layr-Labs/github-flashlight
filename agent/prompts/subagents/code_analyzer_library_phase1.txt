@@ -7,6 +7,10 @@ Component Information:
 - Location: {component_path}
 - Description: {component_description}
 
+**Working Directory**: All source code is located at `/tmp/{SERVICE_NAME}/project/`
+- Use Glob, Grep, and Read tools to analyze code within this directory
+- The component_path is relative to `/tmp/{SERVICE_NAME}/project/`
+
 This library has NO internal library dependencies.
 
 Perform deep analysis while respecting the output structure of `templates/analysis-template/library_analysis_template.md`:
@@ -18,4 +22,4 @@ Perform deep analysis while respecting the output structure of `templates/analys
 5. API Surface: Public interfaces exposed to other libraries/applications
 
 Save your analysis to:
-- files/service_analyses/{library_name}.md (human-readable and adherent to library_analysis_template.md)
+- /tmp/{SERVICE_NAME}/service_analyses/{library_name}.md (human-readable and adherent to library_analysis_template.md)

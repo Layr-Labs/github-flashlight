@@ -55,16 +55,178 @@ PLACEHOLDERS GUIDE:
 
 ## Data Flows
 
+[Document 2-5 major data flows that represent the core functionality of the library. For EACH flow, provide both a visual mermaid diagram and detailed textual description. Focus on flows that would help someone understand how to use the library effectively.]
+
 ### 1. [Primary Data Processing Flow]
-[Describe how data flows through the library's main processing pipeline. Use arrow notation (→) to show the sequence. Start with input data/function calls and trace through transformations, validations, and outputs.]
 
-### 2. [Secondary Flow Name]
-[Detailed flow description with step-by-step component interactions]
+**Flow Description**: [One-sentence summary of what this flow accomplishes and when it's triggered]
 
-### 3. [Additional Flow Name]
-[Detailed flow description]
+```mermaid
+flowchart TD
+    A[Input: Function Call] --> B{Validation}
+    B -->|Valid| C[Transform Data]
+    B -->|Invalid| D[Return Error]
+    C --> E[Apply Business Logic]
+    E --> F{Check Conditions}
+    F -->|Condition Met| G[Process Path A]
+    F -->|Alternative| H[Process Path B]
+    G --> I[Format Output]
+    H --> I
+    I --> J[Return Result]
 
-[Document 2-5 major data flows that represent the core functionality of the library. Focus on flows that would help someone understand how to use the library effectively.]
+    style A fill:#e1f5ff
+    style J fill:#d4edda
+    style D fill:#f8d7da
+```
+
+**Detailed Steps**:
+
+1. **Input Reception** (Entry Point → Validation)
+   - Function: `[function_name(param1: Type, param2: Type)]`
+   - Input: [Description of input data structure]
+   - Validation: [What validations are performed]
+
+2. **Data Transformation** (Validation → Transform)
+   - Component: `[ComponentName]`
+   - Operation: [Describe the transformation logic]
+   - Output: [Intermediate data structure]
+
+3. **Business Logic Application** (Transform → Processing)
+   - Component: `[ComponentName]`
+   - Logic: [Describe key business rules or algorithms]
+   - Decision Points: [Any branching logic]
+
+4. **Output Formation** (Processing → Result)
+   - Component: `[ComponentName]`
+   - Format: [How the result is structured]
+   - Return Type: `[ReturnType]`
+
+**Error Paths**:
+- **[Error Condition]** → [How it's detected and what error is returned]
+- **[Error Condition]** → [Error handling mechanism]
+
+**Performance Characteristics**:
+- Time Complexity: [e.g., O(n)]
+- Space Complexity: [e.g., O(1)]
+- Optimization Notes: [Any relevant performance details]
+
+---
+
+### 2. [Component Interaction Flow]
+
+**Flow Description**: [One-sentence summary of inter-component communication]
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant PublicAPI
+    participant ComponentA
+    participant ComponentB
+    participant DataStore
+
+    Client->>PublicAPI: call_function(params)
+    PublicAPI->>ComponentA: initialize(config)
+    ComponentA->>ComponentB: process_data(input)
+    Note over ComponentB: Internal processing<br/>validation & transformation
+    ComponentB->>DataStore: read/write
+    DataStore-->>ComponentB: data
+    ComponentB-->>ComponentA: result
+    ComponentA-->>PublicAPI: processed_result
+    PublicAPI-->>Client: final_output
+```
+
+**Detailed Steps**:
+
+1. **API Invocation** (Client → PublicAPI)
+   - Function: `[public_function_name(params)]`
+   - Purpose: [What the client is trying to accomplish]
+
+2. **Internal Initialization** (PublicAPI → ComponentA)
+   - Setup: [What initialization occurs]
+   - Configuration: [Any config loaded or validated]
+
+3. **Data Processing** (ComponentA → ComponentB)
+   - Method: `[method_name(data)]`
+   - Processing: [Describe the core processing logic]
+
+4. **Data Access** (ComponentB → DataStore)
+   - Operation: [Read/write operation details]
+   - Data Format: [How data is stored/retrieved]
+
+5. **Result Assembly** (ComponentB → Client)
+   - Aggregation: [How results are combined]
+   - Return Format: [Final output structure]
+
+**Used By**: [List which public APIs or usage patterns depend on this flow]
+
+---
+
+### 3. [State Management Flow]
+
+**Flow Description**: [One-sentence summary of how state is managed]
+
+```mermaid
+stateDiagram-v2
+    [*] --> Uninitialized
+    Uninitialized --> Initialized: initialize()
+    Initialized --> Processing: process()
+    Processing --> Processing: continue_processing()
+    Processing --> Completed: finish()
+    Processing --> Error: error_occurred()
+    Completed --> [*]
+    Error --> Initialized: reset()
+    Error --> [*]: abandon()
+
+    note right of Processing
+        Core processing state
+        Multiple operations possible
+    end note
+```
+
+**State Descriptions**:
+
+- **Uninitialized**: [Description of initial state and constraints]
+- **Initialized**: [What data is ready, what operations are valid]
+- **Processing**: [What happens during processing, valid transitions]
+- **Completed**: [Final state characteristics]
+- **Error**: [Error state handling and recovery options]
+
+**Transition Details**:
+
+1. **initialize()** → [What triggers initialization, what setup occurs]
+2. **process()** → [Processing trigger and requirements]
+3. **finish()** → [Completion conditions and cleanup]
+4. **error_occurred()** → [Error detection and state preservation]
+
+---
+
+### Mermaid Diagram Guidelines
+
+When creating diagrams for library data flows:
+
+**For Processing Pipelines** (use `flowchart TD`):
+- Show input → processing → output flow
+- Include decision points with diamond shapes
+- Highlight validation and error paths
+- Use colors to distinguish input/output/errors
+
+**For Component Interactions** (use `sequenceDiagram`):
+- Show how public APIs delegate to internal components
+- Include method/function names in arrows
+- Use `Note over` for important processing details
+- Show both synchronous and asynchronous calls
+
+**For State Management** (use `stateDiagram-v2`):
+- Document all valid states
+- Show state transitions with trigger methods
+- Include error states and recovery paths
+- Add notes for complex states
+
+**General Tips**:
+- Keep diagrams focused on one flow - don't try to show everything
+- Use descriptive names matching actual code identifiers
+- Include both happy path and error paths
+- Add notes for complex logic or important context
 
 ## Dependencies
 

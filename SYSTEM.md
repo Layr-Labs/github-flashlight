@@ -140,7 +140,7 @@
       </input>
       <process>
         - Phase 1: Analyze depth=0 libraries in parallel (no context needed)
-        - Phase 2: For each depth level, analyze libraries after their dependencies complete
+        - Phase 2: For each depth level, analyze libraries after their dependencies complete in parallel
         - Pass upstream context (architecture, API surface, data flows) to dependent libraries
       </process>
       <output>files/service_analyses/{library_name}.md for each library</output>

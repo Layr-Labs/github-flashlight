@@ -8,6 +8,10 @@ Component Information:
 - Description: {component_description}
 - Libraries Used: {libraries_used_list}
 
+**Working Directory**: All source code is located at `/tmp/{SERVICE_NAME}/project/`
+- Use Glob, Grep, and Read tools to analyze code within this directory
+- The component_path is relative to `/tmp/{SERVICE_NAME}/project/`
+
 {library_context}
 
 This is an APPLICATION - executable system with entrypoint and business purpose.
@@ -45,4 +49,4 @@ application_interactions: [
 ]
 
 Save your analysis to:
-- files/service_analyses/{application_name}.md (human-readable)
+- /tmp/{SERVICE_NAME}/service_analyses/{application_name}.md (human-readable)

@@ -54,22 +54,133 @@ PLACEHOLDERS GUIDE:
 
 ## Data Flows
 
-### 1. [Primary Flow Name]
-[Describe the complete data flow using arrow notation (→) to show the sequence of operations. Start with the entry point (e.g., API request, event trigger, CLI command) and trace through each component, method call, and data transformation until the final output. Include specific data structures, method names, and processing steps.]
+[Document 3-7 major data flows that represent the core functionality of the application. For EACH flow, provide both a visual mermaid diagram and detailed textual description. Focus on the most important or complex flows that would help someone understand how the application works.]
 
-**Error paths**: [List possible error conditions and how they're handled, including error codes, responses, or recovery mechanisms]
+### 1. [Primary Flow Name]
+
+**Flow Description**: [One-sentence summary of what this flow accomplishes and when it's triggered]
+
+```mermaid
+sequenceDiagram
+    participant [Component1]
+    participant [Component2]
+    participant [Component3]
+    participant [ExternalSystem]
+
+    [Component1]->>>[Component2]: [method_call(params)]<br/>[Brief data description]
+    Note over [Component2]: [Processing step description]
+    [Component2]->>>[Component3]: [method_call(data)]<br/>[Data transformation]
+    [Component3]->>>[ExternalSystem]: [API call or operation]<br/>[Request format]
+    [ExternalSystem]--->>>[Component3]: [Response data]
+    [Component3]--->>>[Component2]: [Processed result]
+    [Component2]--->>>[Component1]: [Final output]
+
+    Note over [Component1],[Component3]: [Additional context about the flow]
+```
+
+**Detailed Steps**:
+
+1. **[Step Description]** ([Component1] → [Component2])
+   - Method: `[method_name(param1: Type, param2: Type)]`
+   - Input: [Description of input data structure]
+   - Processing: [What happens in this step]
+
+2. **[Step Description]** ([Component2] → [Component3])
+   - Method: `[method_name()]`
+   - Transformation: [How data is transformed]
+   - Output: [Result data structure]
+
+3. **[Step Description]** ([Component3] → [ExternalSystem])
+   - Operation: [Description of external interaction]
+   - Protocol: [HTTP, gRPC, database query, etc.]
+   - Format: [Data format used]
+
+[Continue for all steps in the flow]
+
+**Error Paths**:
+- **[Error Condition]** → [How it's detected and handled, including error codes/responses]
+- **[Error Condition]** → [Recovery mechanism or error propagation]
+
+**Key Technical Details**:
+- Data formats: [JSON, protobuf, binary, etc.]
+- Protocols: [HTTP/1.1, gRPC, WebSocket, etc.]
+- Transaction handling: [If applicable]
+- Performance characteristics: [Latency, throughput considerations]
+
+---
 
 ### 2. [Secondary Flow Name]
-[Detailed flow description with step-by-step component interactions]
 
-**Error paths**: [Error handling for this flow]
+**Flow Description**: [One-sentence summary]
+
+```mermaid
+sequenceDiagram
+    participant [Component1]
+    participant [Component2]
+    participant [Database]
+
+    [Component1]->>>[Component2]: [operation(data)]
+    [Component2]->>>[Database]: [SQL query or operation]
+    [Database]--->>>[Component2]: [Result set]
+    [Component2]--->>>[Component1]: [Processed data]
+
+    alt [Condition Name]
+        [Component2]->>>[Component2]: [Alternative processing]
+    else [Condition Name]
+        [Component2]->>>[Database]: [Different operation]
+    end
+```
+
+**Detailed Steps**:
+
+[Follow same format as Flow 1]
+
+**Error Paths**:
+[Error handling details]
+
+---
 
 ### 3. [Additional Flow Name]
-[Detailed flow description]
 
-**Used by**: [List which components, endpoints, or other flows depend on this flow]
+**Flow Description**: [One-sentence summary]
 
-[Continue documenting 3-7 major data flows that represent the core functionality of the application. Focus on the most important or complex flows that would help someone understand how the application works.]
+```mermaid
+sequenceDiagram
+    participant [EntryPoint]
+    participant [ProcessorA]
+    participant [ProcessorB]
+    participant [Output]
+
+    [EntryPoint]->>>[ProcessorA]: [Initial data]
+    loop [Loop description]
+        [ProcessorA]->>>[ProcessorB]: [Batch of items]
+        [ProcessorB]--->>>[ProcessorA]: [Processing results]
+    end
+    [ProcessorA]->>>[Output]: [Final aggregated result]
+```
+
+**Detailed Steps**:
+
+[Follow same format]
+
+**Used By**: [List which components, endpoints, or other flows depend on this flow]
+
+---
+
+[Continue documenting remaining major flows using the same format]
+
+### Mermaid Diagram Guidelines
+
+When creating sequence diagrams:
+- Use descriptive participant names matching actual component names
+- Include method/function names in arrows when relevant
+- Add brief data descriptions in `<br/>` tags for clarity
+- Use `Note over` for processing steps or important context
+- Use `alt`/`else` blocks for conditional flows
+- Use `loop` blocks for iterations
+- Use solid arrows (`->>>`) for synchronous calls
+- Use dashed arrows (`--->>>`) for responses/returns
+- Keep diagrams focused on one flow - don't try to show everything
 
 ## Dependencies
 
