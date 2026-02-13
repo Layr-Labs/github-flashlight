@@ -282,8 +282,8 @@ Step 5.2: Confirm Completion
 
 <task_tool_usage>
 Subagent prompts are stored in separate files under agent/prompts/subagents/:
-- code_analyzer_library_phase1.txt - For libraries with no internal dependencies
-- code_analyzer_library_phase2.txt - For libraries with internal dependencies
+- code_analyzer_library_depth0.txt - For libraries with no internal dependencies
+- code_analyzer_library.txt - For libraries with internal dependencies
 - code_analyzer_application.txt - For applications
 - website_generator.txt - For generating interactive website
 
@@ -301,14 +301,14 @@ When spawning code-library-analyzer for Library (Phase 1, no dependencies):
 ```
 subagent_type: "code-library-analyzer"
 description: "Analyze {library_name}"
-prompt: [Load from agent/prompts/subagents/code_analyzer_library_phase1.txt and substitute placeholders]
+prompt: [Load from agent/prompts/subagents/code_analyzer_library_depth0.txt and substitute placeholders]
 ```
 
 When spawning code-library-analyzer for Library (Phase 2, with dependencies):
 ```
 subagent_type: "code-library-analyzer"
 description: "Analyze {library_name}"
-prompt: [Load from agent/prompts/subagents/code_analyzer_library_phase2.txt and substitute placeholders]
+prompt: [Load from agent/prompts/subagents/code_analyzer_library.txt and substitute placeholders]
 ```
 
 When spawning code-library-analyzer for Application:
