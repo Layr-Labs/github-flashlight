@@ -163,7 +163,7 @@ async def chat():
         'SubagentStop': [
             HookMatcher(
                 matcher=None,  # Match all tools
-                hooks=[tracker.post_tool_result_hook]
+                hooks=[tracker.post_subagent_stop_hook]
             )
         ]
     }
@@ -175,7 +175,8 @@ async def chat():
         allowed_tools=["Task", "Glob", "Read", "Bash", "Write"],  # Lead agent has discovery tools
         agents=agents,
         hooks=hooks,
-        model="sonnet"  # Use sonnet for orchestration and discovery
+        model="sonnet",  # Use sonnet for orchestration and discovery
+        max_thinking_tokens=9999  # Enable thinking blocks for lead agent (10k token budget)
     )
 
     print("\n" + "=" * 50)
