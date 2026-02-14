@@ -1,0 +1,2584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tool Calls Visualization - Interactive</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .file-input {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .file-input input[type="file"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .stat-card.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .stat-card.success {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 16px;
+            color: #666;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            color: #333;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .visualization {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .timeline-container {
+            position: relative;
+        }
+
+        .agent-timeline {
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .agent-label {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .agent-badge {
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        .timeline-axis {
+            position: relative;
+            height: 60px;
+            margin: 10px 0;
+        }
+
+        .tool-call-point {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tool-call-point:hover {
+            opacity: 1 !important;
+            transform: scale(1.2);
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1000;
+            max-width: 300px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .tooltip-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+            padding-bottom: 5px;
+        }
+
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+        }
+
+        .tooltip-label {
+            opacity: 0.8;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 6px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #333;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 6px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-group label {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .filter-group select {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+        }
+
+        #lifespanChart {
+            margin-top: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+
+        .weight-badge {
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .weight-negligible { background: #90EE90; color: #333; }
+        .weight-moderate { background: #FFD700; color: #333; }
+        .weight-heavy { background: #FFA500; color: white; }
+        .weight-critical { background: #FF4500; color: white; }
+
+        #clusterGraph {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #fafafa;
+        }
+
+        .cluster-node {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .cluster-node:hover {
+            stroke-width: 3px !important;
+        }
+
+        .cluster-link {
+            stroke: #999;
+            stroke-opacity: 0.3;
+        }
+
+        .cluster-legend {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>🔍 Tool Calls Visualization</h1>
+                <p style="color: #666; margin-top: 5px;">Interactive analysis of agent tool calls and context weights</p>
+            </div>
+            <div class="file-input">
+                <label for="fileInput" style="font-weight: 500;">Tool Calls:</label>
+                <input type="file" id="fileInput" accept=".jsonl">
+                <label for="tokenFileInput" style="font-weight: 500; margin-left: 15px;">Session Log:</label>
+                <input type="file" id="tokenFileInput" accept=".jsonl">
+            </div>
+        </div>
+
+        <div id="statsContainer" class="stats" style="display: none;"></div>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="timeline">Timeline View</button>
+            <button class="tab" data-tab="lifespan">Lifespan View</button>
+            <button class="tab" data-tab="analysis">Context Analysis</button>
+            <button class="tab" data-tab="clustering">Resource Clustering</button>
+            <button class="tab" data-tab="text">Text Analysis</button>
+            <button class="tab" data-tab="tokens">Token Tracking</button>
+        </div>
+
+        <div id="timeline" class="tab-content active">
+            <div class="filter-controls" id="timelineFilters"></div>
+            <div class="visualization">
+                <div id="timelineContainer"></div>
+            </div>
+        </div>
+
+        <div id="lifespan" class="tab-content">
+            <div class="visualization">
+                <svg id="lifespanChart"></svg>
+            </div>
+        </div>
+
+        <div id="analysis" class="tab-content">
+            <div class="visualization">
+                <div id="analysisContainer"></div>
+            </div>
+        </div>
+
+        <div id="clustering" class="tab-content">
+            <div class="visualization">
+                <div style="margin-bottom: 15px;">
+                    <h3 style="margin-bottom: 10px;">Interactive Resource Clustering</h3>
+                    <p style="color: #666; margin-bottom: 15px;">
+                        Tool calls are clustered based on shared resources (files, directories, patterns).
+                        Hover over nodes for details, drag to reposition.
+                    </p>
+                    <div class="filter-controls">
+                        <div class="filter-group">
+                            <label>Cluster By:</label>
+                            <select id="clusterBy">
+                                <option value="directory">Directory</option>
+                                <option value="file">Exact File</option>
+                                <option value="agent">Agent</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Min Links:</label>
+                            <select id="minLinks">
+                                <option value="1">1+ connections</option>
+                                <option value="2" selected>2+ connections</option>
+                                <option value="3">3+ connections</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <svg id="clusterGraph"></svg>
+                <div class="cluster-legend" id="clusterLegend"></div>
+            </div>
+        </div>
+
+        <div id="text" class="tab-content">
+            <div class="visualization">
+                <h3 style="margin-bottom: 15px;">Text Block Analysis</h3>
+                <div id="textStatsContainer" class="stats" style="margin-bottom: 20px;"></div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <h4 style="margin-bottom: 10px;">Text Frequency Over Time</h4>
+                        <svg id="textFrequencyChart"></svg>
+                    </div>
+                    <div>
+                        <h4 style="margin-bottom: 10px;">Text Length Distribution</h4>
+                        <svg id="textLengthChart"></svg>
+                    </div>
+                </div>
+                <div style="margin-top: 20px;">
+                    <h4 style="margin-bottom: 10px;">Text Output by Agent</h4>
+                    <svg id="textByAgentChart"></svg>
+                </div>
+            </div>
+        </div>
+
+        <div id="tokens" class="tab-content">
+            <div class="visualization">
+                <h3 style="margin-bottom: 15px;">Token Usage Tracking</h3>
+                <div id="tokenStatsContainer" class="stats" style="margin-bottom: 20px;"></div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <h4 style="margin-bottom: 10px;">Token Usage Over Time</h4>
+                        <svg id="tokenChart"></svg>
+                    </div>
+                    <div>
+                        <h4 style="margin-bottom: 10px;">Cache Efficiency</h4>
+                        <svg id="cacheChart"></svg>
+                    </div>
+                </div>
+                <div style="margin-top: 20px;">
+                    <h4 style="margin-bottom: 10px;">Cumulative Token Usage (Input vs Output)</h4>
+                    <svg id="cumulativeChart"></svg>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            Loading and processing data...
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip" style="display: none;"></div>
+
+    <script>
+        // Global state
+        let allEvents = [];
+        let toolCallData = [];
+        let agentLifespans = {};
+        let tokenData = [];
+        const toolColors = d3.scaleOrdinal(d3.schemeTableau10);
+        const weightColorScale = d3.scaleThreshold()
+            .domain([3, 6, 9])
+            .range(['#90EE90', '#FFD700', '#FFA500', '#FF4500']);
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Clustering filter listeners (will be attached after data loads)
+        function attachClusteringListeners() {
+            const clusterBy = document.getElementById('clusterBy');
+            const minLinks = document.getElementById('minLinks');
+            if (clusterBy) clusterBy.addEventListener('change', renderClustering);
+            if (minLinks) minLinks.addEventListener('change', renderClustering);
+        }
+
+        // File input handler
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                loadAndProcessFile(file);
+            }
+        });
+
+        // Token file input handler
+        document.getElementById('tokenFileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                loadAndProcessTokenFile(file);
+            }
+        });
+
+        // Context weight calculation functions
+        function getBashCommandWeight(command) {
+            if (!command) return 2;
+            const cmd = command.trim().toLowerCase();
+
+            // File discovery & listing
+            if (/^(ls|find|tree|fd)\b/.test(cmd)) {
+                const hasLimits = ['-maxdepth', 'head', '| head', 'tail', '| tail', '-L '].some(p => cmd.includes(p));
+                if (!hasLimits && (cmd.includes('find') || cmd.includes('tree'))) return 10;
+                return hasLimits ? 7 : 9;
+            }
+
+            // Content viewing
+            if (/^(cat|less|bat|more)\b/.test(cmd)) {
+                if (cmd.includes('cat') && !['head', 'tail', '|'].some(l => cmd.includes(l))) return 9;
+                return 5;
+            }
+
+            if (/^(head|tail)\b/.test(cmd)) return 5;
+            if (cmd.includes('sed') && /-n.*p/.test(cmd)) return 6;
+
+            // Search
+            if (/^(grep|rg|ripgrep|ack|ag)\b/.test(cmd)) {
+                const hasLimits = ['--max-count', '-m ', 'head', '| head', '--glob'].some(p => cmd.includes(p));
+                const excludesBloat = ['!node_modules', '!vendor', '!target', '--glob'].some(e => cmd.includes(e));
+                if (!hasLimits && !excludesBloat) return 10;
+                return hasLimits ? 7 : 9;
+            }
+
+            // JSON/YAML
+            if (['jq', 'yq', 'json.dumps', 'JSON.stringify'].some(t => cmd.includes(t))) {
+                const isCompact = ['-c', 'compact', '{', 'paths'].some(f => cmd.includes(f));
+                return isCompact ? 7 : 9;
+            }
+
+            // Git
+            if (cmd.startsWith('git ')) {
+                if (['status', 'log --oneline', 'branch', 'remote'].some(s => cmd.includes(s))) return 3;
+                if (['diff --stat', 'show --name-only', 'log -'].some(m => cmd.includes(m))) return 5;
+                if (cmd.includes('diff') || cmd.includes('show') || cmd.includes('log -p')) return 8;
+                return 4;
+            }
+
+            // Build/test
+            if (['test', 'make', 'cargo build', 'npm run', 'go test', 'pytest'].some(t => cmd.includes(t))) {
+                const hasLimit = ['tail', 'head', '>', '2>&1'].some(l => cmd.includes(l));
+                return hasLimit ? 7 : 9;
+            }
+
+            // Network
+            if (/^(curl|wget)\b/.test(cmd)) {
+                const isHeadersOnly = ['-I', '--head', '-s'].some(f => cmd.includes(f));
+                const hasLimits = cmd.includes('| head') || cmd.includes('| tail');
+                return isHeadersOnly ? 5 : (hasLimits ? 6 : 8);
+            }
+
+            if (/^(ps|top|lsof|netstat)\b/.test(cmd)) {
+                const hasFilter = ['grep', 'rg', '| head', '| tail'].some(f => cmd.includes(f));
+                return hasFilter ? 6 : 8;
+            }
+
+            // Archive
+            if (['tar -', 'unzip', 'xxd', 'strings', 'objdump'].some(t => cmd.includes(t))) {
+                const isListOnly = ['-l', '-t', '--list'].some(f => cmd.includes(f));
+                return isListOnly ? 7 : 9;
+            }
+
+            return 5;
+        }
+
+        function getToolBaseWeight(toolName, toolInput) {
+            if (toolName === 'Bash') {
+                return getBashCommandWeight(toolInput.command || '');
+            }
+
+            if (['Clock', 'GetMetadata', 'SimpleStatus'].includes(toolName)) return 2;
+            if (['Search', 'Query', 'Lookup'].includes(toolName)) return 5;
+
+            if (toolName === 'Read') {
+                const filePath = toolInput.file_path || '';
+                const dangerous = ['node_modules', 'vendor', 'package-lock', 'yarn.lock', '.min.', 'dist/', 'build/'];
+                if (dangerous.some(d => filePath.toLowerCase().includes(d))) return 9;
+
+                const binary = ['.png', '.jpg', '.pdf', '.zip', '.tar', '.so', '.dll', '.exe'];
+                if (binary.some(ext => filePath.includes(ext))) return 8;
+
+                const limit = toolInput.limit;
+                if (limit && limit <= 200) return 4;
+                if (limit) return 6;
+                return 7;
+            }
+
+            if (['Write', 'Edit', 'Create', 'Update', 'Delete'].includes(toolName)) return 3;
+
+            if (['Glob', 'Find', 'Grep'].includes(toolName)) {
+                const pattern = toolInput.pattern || '';
+                if (pattern.includes('**') || pattern.includes('*/*')) return 8;
+                return 6;
+            }
+
+            if (['Task', 'Spawn', 'SubAgent'].includes(toolName)) return 5;
+
+            return 5;
+        }
+
+        function calculateOutputFactor(outputSize) {
+            if (!outputSize) return 1.5;
+            const approxLines = outputSize / 80;
+            if (approxLines <= 200) return 1.0;
+            if (approxLines <= 800) return 1.5;
+            return 2.0;
+        }
+
+        function calculateContextWeight(toolName, toolInput, outputSize) {
+            const baseWeight = getToolBaseWeight(toolName, toolInput);
+            const outputFactor = calculateOutputFactor(outputSize);
+            return Math.min(10.0, baseWeight * outputFactor);
+        }
+
+        function getWeightCategory(weight) {
+            if (weight <= 2) return { label: 'Negligible', color: '#90EE90', class: 'negligible' };
+            if (weight <= 5) return { label: 'Moderate', color: '#FFD700', class: 'moderate' };
+            if (weight <= 8) return { label: 'Heavy', color: '#FFA500', class: 'heavy' };
+            return { label: 'Critical', color: '#FF4500', class: 'critical' };
+        }
+
+        // Load and process file
+        function loadAndProcessFile(file) {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('loading').innerHTML = 'Loading...';
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const lines = e.target.result.split('\n');
+                    allEvents = lines
+                        .filter(line => line.trim())
+                        .map(line => JSON.parse(line));
+
+                    if (allEvents.length === 0) {
+                        throw new Error('No events found in file');
+                    }
+
+                    processData();
+
+                    if (toolCallData.length === 0) {
+                        throw new Error('No tool call events found. Make sure this is a tool_calls.jsonl file.');
+                    }
+
+                    renderAll();
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('statsContainer').style.display = 'grid';
+                } catch (error) {
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('loading').innerHTML =
+                        `<div class="error">Error loading file: ${error.message}</div>`;
+                    console.error('Error loading file:', error);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Global text block data
+        let textBlockData = [];
+
+        // Process data
+        function processData() {
+            const toolCallStarts = {};
+            const toolCallCompletes = {};
+
+            allEvents.forEach(event => {
+                if (event.event === 'tool_call_start') {
+                    toolCallStarts[event.tool_use_id] = event;
+                } else if (event.event === 'tool_call_complete') {
+                    toolCallCompletes[event.tool_use_id] = event;
+                } else if (event.event === 'text_block') {
+                    textBlockData.push({
+                        timestamp: new Date(event.timestamp),
+                        agentId: event.agent_id,
+                        agentType: event.agent_type,
+                        text: event.text,
+                        textLength: event.text_length,
+                        parentToolUseId: event.parent_tool_use_id
+                    });
+                }
+            });
+
+            toolCallData = Object.entries(toolCallStarts).map(([id, startEvent]) => {
+                const completeEvent = toolCallCompletes[id];
+                const outputSize = completeEvent?.output_size;
+                const weight = calculateContextWeight(
+                    startEvent.tool_name,
+                    startEvent.tool_input || {},
+                    outputSize
+                );
+                const category = getWeightCategory(weight);
+
+                const startTime = new Date(startEvent.timestamp);
+                const completeTime = completeEvent ? new Date(completeEvent.timestamp) : null;
+                const duration = completeTime ? (completeTime - startTime) / 1000 : null;
+
+                return {
+                    id,
+                    agentId: startEvent.agent_id,
+                    agentType: startEvent.agent_type,
+                    toolName: startEvent.tool_name,
+                    toolInput: startEvent.tool_input || {},
+                    timestamp: startTime,
+                    completeTimestamp: completeTime,
+                    duration: duration,
+                    outputSize,
+                    weight,
+                    weightCategory: category,
+                    success: completeEvent?.success,
+                    error: completeEvent?.error
+                };
+            });
+
+            // Calculate agent lifespans
+            agentLifespans = {};
+            allEvents.forEach(event => {
+                if (!event.agent_id) return;
+
+                if (!agentLifespans[event.agent_id]) {
+                    agentLifespans[event.agent_id] = {
+                        start: new Date(event.timestamp),
+                        end: new Date(event.timestamp),
+                        events: []
+                    };
+                } else {
+                    const ts = new Date(event.timestamp);
+                    if (ts < agentLifespans[event.agent_id].start) {
+                        agentLifespans[event.agent_id].start = ts;
+                    }
+                    if (ts > agentLifespans[event.agent_id].end) {
+                        agentLifespans[event.agent_id].end = ts;
+                    }
+                }
+                agentLifespans[event.agent_id].events.push(event);
+            });
+        }
+
+        // Render statistics
+        function renderStats() {
+            const weights = toolCallData.map(d => d.weight);
+            const avgWeight = d3.mean(weights);
+            const criticalCount = weights.filter(w => w > 8).length;
+            const agents = new Set(toolCallData.map(d => d.agentId));
+
+            // Completion metrics
+            const completedCalls = toolCallData.filter(d => d.completeTimestamp);
+            const completionRate = toolCallData.length > 0 ? (completedCalls.length / toolCallData.length * 100) : 0;
+            const durations = completedCalls.map(d => d.duration).filter(d => d !== null);
+            const avgDuration = durations.length > 0 ? d3.mean(durations) : 0;
+            const failedCalls = completedCalls.filter(d => d.success === false).length;
+
+            const stats = [
+                { label: 'Total Tool Calls', value: toolCallData.length, class: 'success' },
+                { label: 'Completed', value: `${completedCalls.length} (${completionRate.toFixed(0)}%)`, class: completionRate < 90 ? 'warning' : 'success' },
+                { label: 'Avg Duration', value: formatTime(avgDuration), class: avgDuration > 5 ? 'warning' : 'success' },
+                { label: 'Failed Calls', value: failedCalls, class: failedCalls > 0 ? 'warning' : 'success' },
+                { label: 'Active Agents', value: agents.size, class: 'success' },
+                { label: 'Avg Context Weight', value: avgWeight.toFixed(2), class: avgWeight > 7 ? 'warning' : 'success' }
+            ];
+
+            const container = document.getElementById('statsContainer');
+            container.innerHTML = stats.map(stat => `
+                <div class="stat-card ${stat.class}">
+                    <div class="stat-label">${stat.label}</div>
+                    <div class="stat-value">${stat.value}</div>
+                </div>
+            `).join('');
+        }
+
+        // Render timeline
+        function renderTimeline() {
+            const container = document.getElementById('timelineContainer');
+            container.innerHTML = '';
+
+            if (!toolCallData || toolCallData.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 60px 20px; color: #666;">
+                        <h3 style="margin-bottom: 10px;">No tool call data</h3>
+                        <p>Please load a tool_calls.jsonl file first</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Group by agent
+            const byAgent = d3.group(toolCallData, d => d.agentId);
+            const agents = Array.from(byAgent.keys()).sort((a, b) => {
+                if (a === 'MAIN_AGENT') return -1;
+                if (b === 'MAIN_AGENT') return 1;
+                return a.localeCompare(b);
+            });
+
+            // Create filters - preserve current values
+            const filters = document.getElementById('timelineFilters');
+            const currentToolFilter = document.getElementById('toolFilter')?.value || 'all';
+            const currentWeightFilter = document.getElementById('weightFilter')?.value || '0';
+
+            const uniqueTools = Array.from(new Set(toolCallData.map(d => d.toolName))).sort();
+            filters.innerHTML = `
+                <div class="filter-group">
+                    <label>Tool:</label>
+                    <select id="toolFilter">
+                        <option value="all">All Tools</option>
+                        ${uniqueTools.map(t => `<option value="${t}">${t}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Min Weight:</label>
+                    <select id="weightFilter">
+                        <option value="0">All</option>
+                        <option value="6">Heavy+ (6-10)</option>
+                        <option value="9">Critical (9-10)</option>
+                    </select>
+                </div>
+            `;
+
+            // Restore filter values
+            document.getElementById('toolFilter').value = currentToolFilter;
+            document.getElementById('weightFilter').value = currentWeightFilter;
+
+            // Attach event listeners
+            document.getElementById('toolFilter').addEventListener('change', renderTimeline);
+            document.getElementById('weightFilter').addEventListener('change', renderTimeline);
+
+            const toolFilter = currentToolFilter;
+            const weightFilter = parseFloat(currentWeightFilter);
+
+            // Also include agents that only have text blocks
+            const agentsWithTextBlocks = new Set(textBlockData.map(tb => tb.agentId));
+            const allAgentsSet = new Set([...agents, ...agentsWithTextBlocks]);
+            const allAgents = Array.from(allAgentsSet).sort((a, b) => {
+                if (a === 'MAIN_AGENT') return -1;
+                if (b === 'MAIN_AGENT') return 1;
+                return a.localeCompare(b);
+            });
+
+            allAgents.forEach(agentId => {
+                let agentData = byAgent.get(agentId) ? Array.from(byAgent.get(agentId)) : [];
+
+                // Apply filters
+                if (toolFilter !== 'all') {
+                    agentData = agentData.filter(d => d.toolName === toolFilter);
+                }
+                if (weightFilter > 0) {
+                    agentData = agentData.filter(d => d.weight >= weightFilter);
+                }
+
+                // Check if this agent has text blocks
+                const agentTextBlocks = textBlockData.filter(tb => tb.agentId === agentId);
+
+                // Skip if no tool calls and no text blocks
+                if (agentData.length === 0 && agentTextBlocks.length === 0) return;
+
+                const agentDiv = document.createElement('div');
+                agentDiv.className = 'agent-timeline';
+
+                // Calculate time range from both tool calls and text blocks
+                const toolTimes = agentData.map(d => d.timestamp);
+                const textTimes = agentTextBlocks.map(tb => tb.timestamp);
+                const allTimes = [...toolTimes, ...textTimes];
+
+                const minTime = d3.min(allTimes);
+                const maxTime = d3.max(allTimes);
+                const duration = (maxTime - minTime) / 1000;
+
+                const weights = agentData.map(d => d.weight);
+                const avgWeight = weights.length > 0 ? d3.mean(weights) : 0;
+                const criticalCount = weights.filter(w => w > 8).length;
+
+                agentDiv.innerHTML = `
+                    <div class="agent-label">
+                        ${agentId}
+                        ${agentData.length > 0 ? `<span class="agent-badge">${agentData.length} calls</span>` : ''}
+                        ${agentTextBlocks.length > 0 ? `<span class="agent-badge" style="background: #e91e63">${agentTextBlocks.length} text blocks</span>` : ''}
+                        ${weights.length > 0 ? `<span class="agent-badge" style="background: ${avgWeight > 8 ? '#FF4500' : avgWeight > 6 ? '#FFA500' : '#667eea'}">
+                            Avg: ${avgWeight.toFixed(1)}
+                        </span>` : ''}
+                        ${criticalCount > 0 ? `<span class="agent-badge" style="background: #FF4500">⚠️ ${criticalCount} critical</span>` : ''}
+                    </div>
+                `;
+
+                const svg = d3.create('svg')
+                    .attr('width', '100%')
+                    .attr('height', 80)
+                    .style('overflow', 'visible');
+
+                const margin = { left: 0, right: 50, top: 20, bottom: 20 };
+                const width = container.offsetWidth - margin.left - margin.right;
+
+                const xScale = d3.scaleTime()
+                    .domain([minTime, maxTime])
+                    .range([margin.left, width]);
+
+                const xAxis = d3.axisBottom(xScale)
+                    .ticks(8)
+                    .tickFormat(d => {
+                        const seconds = (d - minTime) / 1000;
+                        return `+${formatTime(seconds)}`;
+                    });
+
+                svg.append('g')
+                    .attr('transform', `translate(0, 50)`)
+                    .call(xAxis);
+
+                svg.append('line')
+                    .attr('x1', margin.left)
+                    .attr('x2', width)
+                    .attr('y1', 30)
+                    .attr('y2', 30)
+                    .attr('stroke', '#ddd')
+                    .attr('stroke-width', 1);
+
+                // Draw text blocks as small vertical markers (draw before tool calls so they appear behind)
+                svg.selectAll('.text-block')
+                    .data(agentTextBlocks)
+                    .join('line')
+                    .attr('class', 'text-block-marker')
+                    .attr('x1', d => xScale(d.timestamp))
+                    .attr('x2', d => xScale(d.timestamp))
+                    .attr('y1', 5)
+                    .attr('y2', 55)
+                    .attr('stroke', '#e91e63')
+                    .attr('stroke-width', 2)
+                    .attr('opacity', 0.7)
+                    .on('mouseover', function(event, d) {
+                        const tooltip = document.getElementById('tooltip');
+                        tooltip.style.display = 'block';
+                        tooltip.innerHTML = `
+                            <div class="tooltip-title">📝 Text Block</div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Time:</span>
+                                <span>+${formatTime((d.timestamp - minTime) / 1000)}</span>
+                            </div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Length:</span>
+                                <span>${d.textLength} chars</span>
+                            </div>
+                            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">
+                                <div class="tooltip-label">Preview:</div>
+                                <div style="font-size: 11px; margin-top: 4px; max-width: 300px; word-break: break-word;">
+                                    ${d.text.substring(0, 150)}${d.text.length > 150 ? '...' : ''}
+                                </div>
+                            </div>
+                        `;
+                        tooltip.style.left = event.pageX + 10 + 'px';
+                        tooltip.style.top = event.pageY + 10 + 'px';
+                    })
+                    .on('mouseout', () => {
+                        document.getElementById('tooltip').style.display = 'none';
+                    });
+
+                // Draw completion lines (duration bars) for tool calls that have completed
+                svg.selectAll('.tool-duration')
+                    .data(agentData.filter(d => d.completeTimestamp))
+                    .join('line')
+                    .attr('class', 'tool-duration')
+                    .attr('x1', d => xScale(d.timestamp))
+                    .attr('x2', d => xScale(d.completeTimestamp))
+                    .attr('y1', 30)
+                    .attr('y2', 30)
+                    .attr('stroke', d => d.success === false ? '#ff4444' : '#4CAF50')
+                    .attr('stroke-width', 3)
+                    .attr('opacity', 0.6);
+
+                // Draw completion markers (end points)
+                svg.selectAll('.tool-complete')
+                    .data(agentData.filter(d => d.completeTimestamp))
+                    .join('rect')
+                    .attr('class', 'tool-complete-marker')
+                    .attr('x', d => xScale(d.completeTimestamp) - 3)
+                    .attr('y', 27)
+                    .attr('width', 6)
+                    .attr('height', 6)
+                    .attr('fill', d => d.success === false ? '#ff4444' : '#4CAF50')
+                    .attr('opacity', 0.9)
+                    .on('mouseover', function(event, d) {
+                        const tooltip = document.getElementById('tooltip');
+                        tooltip.style.display = 'block';
+                        tooltip.innerHTML = `
+                            <div class="tooltip-title">✓ ${d.toolName} Complete</div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Start:</span>
+                                <span>+${formatTime((d.timestamp - minTime) / 1000)}</span>
+                            </div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Complete:</span>
+                                <span>+${formatTime((d.completeTimestamp - minTime) / 1000)}</span>
+                            </div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Duration:</span>
+                                <span style="font-weight: bold; color: ${d.duration > 5 ? '#ff9800' : '#4CAF50'}">${formatTime(d.duration)}</span>
+                            </div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Status:</span>
+                                <span style="font-weight: bold; color: ${d.success === false ? '#ff4444' : '#4CAF50'}">
+                                    ${d.success === false ? '✗ Failed' : '✓ Success'}
+                                </span>
+                            </div>
+                            ${d.outputSize ? `
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Output Size:</span>
+                                <span>${(d.outputSize / 1024).toFixed(1)} KB</span>
+                            </div>
+                            ` : ''}
+                            ${d.error ? `
+                            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">
+                                <div class="tooltip-label">Error:</div>
+                                <div style="font-size: 11px; margin-top: 4px; color: #ff4444;">
+                                    ${d.error.substring(0, 100)}${d.error.length > 100 ? '...' : ''}
+                                </div>
+                            </div>
+                            ` : ''}
+                        `;
+                        tooltip.style.left = event.pageX + 10 + 'px';
+                        tooltip.style.top = event.pageY + 10 + 'px';
+                    })
+                    .on('mouseout', () => {
+                        document.getElementById('tooltip').style.display = 'none';
+                    });
+
+                // Draw tool calls (start points)
+                svg.selectAll('.tool-call')
+                    .data(agentData)
+                    .join('circle')
+                    .attr('class', 'tool-call-point')
+                    .attr('cx', d => xScale(d.timestamp))
+                    .attr('cy', 30)
+                    .attr('r', d => 3 + d.weight * 1.5)
+                    .attr('fill', d => toolColors(d.toolName))
+                    .attr('stroke', d => d.weightCategory.color)
+                    .attr('stroke-width', 2.5)
+                    .attr('opacity', 0.8)
+                    .on('mouseover', function(event, d) {
+                        const tooltip = document.getElementById('tooltip');
+                        tooltip.style.display = 'block';
+                        tooltip.innerHTML = `
+                            <div class="tooltip-title">${d.toolName}</div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Started:</span>
+                                <span>+${formatTime((d.timestamp - minTime) / 1000)}</span>
+                            </div>
+                            ${d.duration !== null ? `
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Duration:</span>
+                                <span style="font-weight: bold; color: ${d.duration > 5 ? '#ff9800' : '#4CAF50'}">${formatTime(d.duration)}</span>
+                            </div>
+                            ` : `
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Status:</span>
+                                <span style="color: #ff9800">⏳ No completion event</span>
+                            </div>
+                            `}
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Context Weight:</span>
+                                <span class="weight-badge weight-${d.weightCategory.class}">
+                                    ${d.weight.toFixed(1)} (${d.weightCategory.label})
+                                </span>
+                            </div>
+                            ${d.outputSize ? `
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Output Size:</span>
+                                <span>${(d.outputSize / 1024).toFixed(1)} KB</span>
+                            </div>
+                            ` : ''}
+                            ${d.success === false ? `
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Status:</span>
+                                <span style="font-weight: bold; color: #ff4444">✗ Failed</span>
+                            </div>
+                            ` : ''}
+                            ${d.toolName === 'Bash' && d.toolInput.command ? `
+                            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">
+                                <div class="tooltip-label">Command:</div>
+                                <code style="font-size: 11px; display: block; margin-top: 4px; word-break: break-all;">
+                                    ${d.toolInput.command.substring(0, 100)}${d.toolInput.command.length > 100 ? '...' : ''}
+                                </code>
+                            </div>
+                            ` : ''}
+                        `;
+                        tooltip.style.left = event.pageX + 10 + 'px';
+                        tooltip.style.top = event.pageY + 10 + 'px';
+                    })
+                    .on('mouseout', () => {
+                        document.getElementById('tooltip').style.display = 'none';
+                    });
+
+                agentDiv.appendChild(svg.node());
+                container.appendChild(agentDiv);
+            });
+
+            // Add legend
+            const legendDiv = document.createElement('div');
+            legendDiv.className = 'legend';
+            legendDiv.innerHTML = '<strong>Tool Types:</strong>';
+
+            const uniqueTools2 = Array.from(new Set(toolCallData.map(d => d.toolName))).sort();
+            uniqueTools2.forEach(tool => {
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                item.innerHTML = `
+                    <div class="legend-color" style="background: ${toolColors(tool)}; border: 2px solid ${toolColors(tool)}"></div>
+                    <span>${tool}</span>
+                `;
+                legendDiv.appendChild(item);
+            });
+
+            // Add text block marker to legend
+            if (textBlockData.length > 0) {
+                const textBlockItem = document.createElement('div');
+                textBlockItem.className = 'legend-item';
+                textBlockItem.style.display = 'flex';
+                textBlockItem.style.alignItems = 'center';
+                textBlockItem.innerHTML = `
+                    <svg width="20" height="20" style="margin-right: 8px;">
+                        <line x1="10" x2="10" y1="3" y2="17" stroke="#e91e63" stroke-width="2" opacity="0.7"/>
+                    </svg>
+                    <span>Text Block</span>
+                `;
+                legendDiv.appendChild(textBlockItem);
+            }
+
+            legendDiv.innerHTML += '<div style="width: 100%; margin: 10px 0;"></div><strong>Context Weight:</strong>';
+
+            [
+                { label: 'Negligible (0-2)', color: '#90EE90' },
+                { label: 'Moderate (3-5)', color: '#FFD700' },
+                { label: 'Heavy (6-8)', color: '#FFA500' },
+                { label: 'Critical (9-10)', color: '#FF4500' }
+            ].forEach(cat => {
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                item.innerHTML = `
+                    <div class="legend-color" style="border-color: ${cat.color}; background: transparent;"></div>
+                    <span>${cat.label}</span>
+                `;
+                legendDiv.appendChild(item);
+            });
+
+            container.appendChild(legendDiv);
+        }
+
+        // Helper function to format seconds as HH:MM:SS
+        function formatTime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Render lifespan
+        function renderLifespan() {
+            const svg = d3.select('#lifespanChart');
+            svg.selectAll('*').remove();
+
+            const agents = Object.keys(agentLifespans).sort((a, b) => {
+                if (a === 'MAIN_AGENT') return -1;
+                if (b === 'MAIN_AGENT') return 1;
+                return a.localeCompare(b);
+            });
+
+            const allStarts = Object.values(agentLifespans).map(d => d.start);
+            const allEnds = Object.values(agentLifespans).map(d => d.end);
+            const minTime = d3.min(allStarts);
+            const maxTime = d3.max(allEnds);
+
+            const margin = { top: 40, right: 50, bottom: 50, left: 250 };
+            const width = 1400;
+            const height = agents.length * 60 + margin.top + margin.bottom;
+
+            svg.attr('width', width).attr('height', height);
+
+            const g = svg.append('g')
+                .attr('transform', `translate(${margin.left}, ${margin.top})`);
+
+            const xScale = d3.scaleTime()
+                .domain([minTime, maxTime])
+                .range([0, width - margin.left - margin.right]);
+
+            const yScale = d3.scaleBand()
+                .domain(agents)
+                .range([0, height - margin.top - margin.bottom])
+                .padding(0.3);
+
+            // X axis
+            g.append('g')
+                .attr('transform', `translate(0, ${height - margin.top - margin.bottom})`)
+                .call(d3.axisBottom(xScale)
+                    .ticks(10)
+                    .tickFormat(d => {
+                        const seconds = (d - minTime) / 1000;
+                        return `+${formatTime(seconds)}`;
+                    }))
+                .selectAll('text')
+                .style('font-size', '12px');
+
+            // Y axis
+            g.append('g')
+                .call(d3.axisLeft(yScale))
+                .selectAll('text')
+                .style('font-size', '13px')
+                .style('font-weight', d => d === 'MAIN_AGENT' ? 'bold' : 'normal');
+
+            // Bars
+            agents.forEach(agent => {
+                const data = agentLifespans[agent];
+                const duration = (data.end - data.start) / 1000;
+
+                g.append('rect')
+                    .attr('x', xScale(data.start))
+                    .attr('y', yScale(agent))
+                    .attr('width', xScale(data.end) - xScale(data.start))
+                    .attr('height', yScale.bandwidth())
+                    .attr('fill', agent === 'MAIN_AGENT' ? '#4169E1' : '#667eea')
+                    .attr('opacity', agent === 'MAIN_AGENT' ? 0.8 : 0.6)
+                    .attr('stroke', agent === 'MAIN_AGENT' ? 'darkblue' : '#333')
+                    .attr('stroke-width', agent === 'MAIN_AGENT' ? 2 : 1);
+
+                // Start marker
+                g.append('polygon')
+                    .attr('points', '0,-8 10,0 0,8')
+                    .attr('transform', `translate(${xScale(data.start)}, ${yScale(agent) + yScale.bandwidth() / 2})`)
+                    .attr('fill', 'green')
+                    .attr('stroke', 'darkgreen')
+                    .attr('stroke-width', 1);
+
+                // End marker
+                g.append('rect')
+                    .attr('x', xScale(data.end) - 5)
+                    .attr('y', yScale(agent) + yScale.bandwidth() / 2 - 5)
+                    .attr('width', 10)
+                    .attr('height', 10)
+                    .attr('fill', 'red')
+                    .attr('stroke', 'darkred')
+                    .attr('stroke-width', 1);
+
+                // Duration label
+                g.append('text')
+                    .attr('x', xScale(data.start) + (xScale(data.end) - xScale(data.start)) / 2)
+                    .attr('y', yScale(agent) + yScale.bandwidth() / 2)
+                    .attr('text-anchor', 'middle')
+                    .attr('dominant-baseline', 'middle')
+                    .attr('font-size', '12px')
+                    .attr('font-weight', 'bold')
+                    .attr('fill', '#333')
+                    .text(formatTime(duration));
+
+                // Add tool usage markers for this agent
+                const agentTools = toolCallData.filter(tc => tc.agentId === agent);
+                g.selectAll(`.tool-marker-${agent.replace(/[^a-zA-Z0-9]/g, '_')}`)
+                    .data(agentTools)
+                    .join('circle')
+                    .attr('class', `tool-marker-${agent.replace(/[^a-zA-Z0-9]/g, '_')}`)
+                    .attr('cx', d => xScale(d.timestamp))
+                    .attr('cy', yScale(agent) + yScale.bandwidth() / 2)
+                    .attr('r', 4)
+                    .attr('fill', d => toolColors(d.toolName))
+                    .attr('stroke', d => d.weightCategory.color)
+                    .attr('stroke-width', 1.5)
+                    .attr('opacity', 0.9)
+                    .style('cursor', 'pointer')
+                    .on('mouseover', function(event, d) {
+                        d3.select(this).attr('r', 6).attr('opacity', 1);
+                        const tooltip = document.getElementById('tooltip');
+                        tooltip.style.display = 'block';
+                        tooltip.innerHTML = `
+                            <div class="tooltip-title">${d.toolName}</div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Agent:</span>
+                                <span>${agent}</span>
+                            </div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Time:</span>
+                                <span>+${formatTime((d.timestamp - minTime) / 1000)}</span>
+                            </div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Weight:</span>
+                                <span class="weight-badge weight-${d.weightCategory.class}">
+                                    ${d.weight.toFixed(1)}
+                                </span>
+                            </div>
+                        `;
+                        tooltip.style.left = event.pageX + 10 + 'px';
+                        tooltip.style.top = event.pageY + 10 + 'px';
+                    })
+                    .on('mouseout', function() {
+                        d3.select(this).attr('r', 4).attr('opacity', 0.9);
+                        document.getElementById('tooltip').style.display = 'none';
+                    });
+
+                // Add text block markers for this agent
+                const agentTextBlocks = textBlockData.filter(tb => tb.agentId === agent);
+                g.selectAll(`.text-marker-${agent.replace(/[^a-zA-Z0-9]/g, '_')}`)
+                    .data(agentTextBlocks)
+                    .join('line')
+                    .attr('class', `text-marker-${agent.replace(/[^a-zA-Z0-9]/g, '_')}`)
+                    .attr('x1', d => xScale(d.timestamp))
+                    .attr('x2', d => xScale(d.timestamp))
+                    .attr('y1', yScale(agent))
+                    .attr('y2', yScale(agent) + yScale.bandwidth())
+                    .attr('stroke', '#e91e63')
+                    .attr('stroke-width', 2)
+                    .attr('opacity', 0.6)
+                    .style('cursor', 'pointer')
+                    .on('mouseover', function(event, d) {
+                        d3.select(this).attr('opacity', 1).attr('stroke-width', 3);
+                        const tooltip = document.getElementById('tooltip');
+                        tooltip.style.display = 'block';
+                        tooltip.innerHTML = `
+                            <div class="tooltip-title">📝 Text Block</div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Agent:</span>
+                                <span>${agent}</span>
+                            </div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Time:</span>
+                                <span>+${formatTime((d.timestamp - minTime) / 1000)}</span>
+                            </div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Length:</span>
+                                <span>${d.textLength} chars</span>
+                            </div>
+                            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">
+                                <div class="tooltip-label">Preview:</div>
+                                <div style="font-size: 11px; margin-top: 4px; max-width: 300px; word-break: break-word;">
+                                    ${d.text.substring(0, 100)}${d.text.length > 100 ? '...' : ''}
+                                </div>
+                            </div>
+                        `;
+                        tooltip.style.left = event.pageX + 10 + 'px';
+                        tooltip.style.top = event.pageY + 10 + 'px';
+                    })
+                    .on('mouseout', function() {
+                        d3.select(this).attr('opacity', 0.6).attr('stroke-width', 2);
+                        document.getElementById('tooltip').style.display = 'none';
+                    });
+            });
+
+            // Title
+            svg.append('text')
+                .attr('x', width / 2)
+                .attr('y', 20)
+                .attr('text-anchor', 'middle')
+                .attr('font-size', '18px')
+                .attr('font-weight', 'bold')
+                .text('Agent Lifespan Timeline with Tool Usage Patterns');
+
+            // Legend
+            const legendX = width - 200;
+            const legendY = 30;
+            const legendG = svg.append('g')
+                .attr('transform', `translate(${legendX}, ${legendY})`);
+
+            // Legend background
+            legendG.append('rect')
+                .attr('x', -10)
+                .attr('y', -10)
+                .attr('width', 180)
+                .attr('height', 110)
+                .attr('fill', 'white')
+                .attr('stroke', '#ddd')
+                .attr('stroke-width', 1)
+                .attr('rx', 5);
+
+            // Legend title
+            legendG.append('text')
+                .attr('x', 0)
+                .attr('y', 5)
+                .attr('font-size', '12px')
+                .attr('font-weight', 'bold')
+                .text('Legend');
+
+            // Tool usage marker
+            legendG.append('circle')
+                .attr('cx', 5)
+                .attr('cy', 25)
+                .attr('r', 4)
+                .attr('fill', '#667eea')
+                .attr('stroke', '#333')
+                .attr('stroke-width', 1.5);
+            legendG.append('text')
+                .attr('x', 15)
+                .attr('y', 28)
+                .attr('font-size', '11px')
+                .text('Tool Call');
+
+            // Text block marker
+            legendG.append('line')
+                .attr('x1', 5)
+                .attr('x2', 5)
+                .attr('y1', 38)
+                .attr('y2', 50)
+                .attr('stroke', '#e91e63')
+                .attr('stroke-width', 2)
+                .attr('opacity', 0.6);
+            legendG.append('text')
+                .attr('x', 15)
+                .attr('y', 47)
+                .attr('font-size', '11px')
+                .text('Text Block');
+
+            // Start marker
+            legendG.append('polygon')
+                .attr('points', '0,-4 8,0 0,4')
+                .attr('transform', `translate(5, 65)`)
+                .attr('fill', 'green')
+                .attr('stroke', 'darkgreen')
+                .attr('stroke-width', 1);
+            legendG.append('text')
+                .attr('x', 15)
+                .attr('y', 68)
+                .attr('font-size', '11px')
+                .text('Agent Start');
+
+            // End marker
+            legendG.append('rect')
+                .attr('x', 1)
+                .attr('y', 76)
+                .attr('width', 8)
+                .attr('height', 8)
+                .attr('fill', 'red')
+                .attr('stroke', 'darkred')
+                .attr('stroke-width', 1);
+            legendG.append('text')
+                .attr('x', 15)
+                .attr('y', 85)
+                .attr('font-size', '11px')
+                .text('Agent End');
+        }
+
+        // Render analysis
+        function renderAnalysis() {
+            const container = document.getElementById('analysisContainer');
+
+            const byAgent = d3.group(toolCallData, d => d.agentId);
+            const agents = Array.from(byAgent.keys()).sort((a, b) => {
+                if (a === 'MAIN_AGENT') return -1;
+                if (b === 'MAIN_AGENT') return 1;
+                return a.localeCompare(b);
+            });
+
+            let html = '<h2 style="margin-bottom: 20px;">Context Weight Analysis by Agent</h2>';
+
+            agents.forEach(agent => {
+                const data = Array.from(byAgent.get(agent));
+                const weights = data.map(d => d.weight);
+                const avgWeight = d3.mean(weights);
+                const maxWeight = d3.max(weights);
+                const critical = weights.filter(w => w > 8).length;
+                const heavy = weights.filter(w => w > 6 && w <= 8).length;
+                const moderate = weights.filter(w => w >= 3 && w <= 6).length;
+                const negligible = weights.filter(w => w < 3).length;
+
+                // Group by tool name and calculate stats
+                const toolBreakdown = d3.rollup(
+                    data,
+                    v => ({
+                        count: v.length,
+                        avgWeight: d3.mean(v, d => d.weight),
+                        totalOutputSize: d3.sum(v, d => d.outputSize || 0),
+                        criticalCount: v.filter(d => d.weight > 8).length
+                    }),
+                    d => d.toolName
+                );
+
+                // Sort tools by count descending
+                const sortedTools = Array.from(toolBreakdown.entries())
+                    .sort((a, b) => b[1].count - a[1].count);
+
+                html += `
+                    <div style="margin-bottom: 30px; padding: 20px; background: #f9f9f9; border-radius: 8px; border-left: 4px solid ${avgWeight > 8 ? '#FF4500' : avgWeight > 6 ? '#FFA500' : '#667eea'}">
+                        <h3 style="margin-bottom: 15px;">${agent}</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <div style="font-size: 12px; color: #666;">Total Calls</div>
+                                <div style="font-size: 24px; font-weight: bold;">${data.length}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #666;">Avg Weight</div>
+                                <div style="font-size: 24px; font-weight: bold; color: ${avgWeight > 8 ? '#FF4500' : avgWeight > 6 ? '#FFA500' : '#667eea'}">${avgWeight.toFixed(2)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #666;">Max Weight</div>
+                                <div style="font-size: 24px; font-weight: bold; color: ${maxWeight > 8 ? '#FF4500' : '#FFA500'}">${maxWeight.toFixed(2)}</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <strong>Risk Distribution:</strong>
+                            <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+                                ${critical > 0 ? `<span class="weight-badge weight-critical">Critical: ${critical}</span>` : ''}
+                                ${heavy > 0 ? `<span class="weight-badge weight-heavy">Heavy: ${heavy}</span>` : ''}
+                                ${moderate > 0 ? `<span class="weight-badge weight-moderate">Moderate: ${moderate}</span>` : ''}
+                                ${negligible > 0 ? `<span class="weight-badge weight-negligible">Negligible: ${negligible}</span>` : ''}
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 20px;">
+                            <strong>Tool Usage Breakdown:</strong>
+                            <div style="margin-top: 10px; background: white; border-radius: 6px; overflow: hidden;">
+                                <table style="width: 100%; border-collapse: collapse;">
+                                    <thead style="background: #f0f0f0;">
+                                        <tr>
+                                            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Tool</th>
+                                            <th style="padding: 10px; text-align: center; border-bottom: 2px solid #ddd;">Count</th>
+                                            <th style="padding: 10px; text-align: center; border-bottom: 2px solid #ddd;">% of Agent</th>
+                                            <th style="padding: 10px; text-align: center; border-bottom: 2px solid #ddd;">Avg Weight</th>
+                                            <th style="padding: 10px; text-align: center; border-bottom: 2px solid #ddd;">Output Size</th>
+                                            <th style="padding: 10px; text-align: center; border-bottom: 2px solid #ddd;">Critical</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${sortedTools.map(([tool, stats]) => {
+                                            const percentage = (stats.count / data.length * 100).toFixed(1);
+                                            const weightColor = stats.avgWeight > 8 ? '#FF4500' :
+                                                              stats.avgWeight > 6 ? '#FFA500' :
+                                                              stats.avgWeight > 3 ? '#FFD700' : '#90EE90';
+                                            return `
+                                                <tr style="border-bottom: 1px solid #eee;">
+                                                    <td style="padding: 10px;">
+                                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                                            <div style="width: 12px; height: 12px; border-radius: 50%; background: ${toolColors(tool)}; border: 1px solid #333;"></div>
+                                                            <strong>${tool}</strong>
+                                                        </div>
+                                                    </td>
+                                                    <td style="padding: 10px; text-align: center; font-weight: bold;">${stats.count}</td>
+                                                    <td style="padding: 10px; text-align: center;">${percentage}%</td>
+                                                    <td style="padding: 10px; text-align: center;">
+                                                        <span style="background: ${weightColor}; color: ${stats.avgWeight > 6 ? 'white' : '#333'}; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;">
+                                                            ${stats.avgWeight.toFixed(1)}
+                                                        </span>
+                                                    </td>
+                                                    <td style="padding: 10px; text-align: center;">${stats.totalOutputSize > 0 ? (stats.totalOutputSize / 1024).toFixed(1) + ' KB' : 'N/A'}</td>
+                                                    <td style="padding: 10px; text-align: center;">
+                                                        ${stats.criticalCount > 0 ?
+                                                            `<span class="weight-badge weight-critical">${stats.criticalCount}</span>` :
+                                                            '<span style="color: #999;">0</span>'}
+                                                    </td>
+                                                </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        ${critical > 0 ? `
+                        <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;">
+                            <strong>⚠️ Warning:</strong> This agent has ${critical} critical tool calls (weight > 8) that may cause significant context bloat.
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Extract resources from tool call
+        function extractResources(toolCall) {
+            const resources = [];
+            const input = toolCall.toolInput;
+
+            if (toolCall.toolName === 'Read' || toolCall.toolName === 'Write' || toolCall.toolName === 'Edit') {
+                if (input.file_path) {
+                    resources.push({
+                        type: 'file',
+                        value: input.file_path,
+                        directory: input.file_path.split('/').slice(0, -1).join('/')
+                    });
+                }
+            } else if (toolCall.toolName === 'Bash') {
+                // Extract file paths from bash commands
+                if (input.command) {
+                    const cmd = input.command;
+                    // Match file paths in commands
+                    const pathMatches = cmd.match(/(?:^|\s)([\w\-\.\/]+\/[\w\-\.\/]+)/g);
+                    if (pathMatches) {
+                        pathMatches.forEach(match => {
+                            const path = match.trim();
+                            resources.push({
+                                type: 'file',
+                                value: path,
+                                directory: path.split('/').slice(0, -1).join('/')
+                            });
+                        });
+                    }
+                }
+            } else if (toolCall.toolName === 'Glob' || toolCall.toolName === 'Grep') {
+                if (input.pattern) {
+                    resources.push({
+                        type: 'pattern',
+                        value: input.pattern,
+                        directory: input.path || ''
+                    });
+                }
+                if (input.path) {
+                    resources.push({
+                        type: 'directory',
+                        value: input.path,
+                        directory: input.path
+                    });
+                }
+            }
+
+            return resources;
+        }
+
+        // Render clustering
+        function renderClustering() {
+            const svg = d3.select('#clusterGraph');
+            svg.selectAll('*').remove();
+
+            const clusterBy = document.getElementById('clusterBy').value;
+            const minLinks = parseInt(document.getElementById('minLinks').value);
+
+            // Build graph structure
+            const nodes = [];
+            const links = [];
+            const resourceToNodes = new Map();
+
+            // Create nodes for each tool call
+            toolCallData.forEach((call, idx) => {
+                const resources = extractResources(call);
+                const node = {
+                    id: idx,
+                    toolCall: call,
+                    agentId: call.agentId,
+                    toolName: call.toolName,
+                    weight: call.weight,
+                    resources: resources
+                };
+                nodes.push(node);
+
+                // Map resources to nodes
+                resources.forEach(res => {
+                    let key;
+                    if (clusterBy === 'directory') {
+                        key = res.directory || res.value;
+                    } else if (clusterBy === 'file') {
+                        key = res.value;
+                    } else { // agent
+                        key = call.agentId;
+                    }
+
+                    if (!resourceToNodes.has(key)) {
+                        resourceToNodes.set(key, []);
+                    }
+                    resourceToNodes.get(key).push(node);
+                });
+            });
+
+            // Create links between nodes that share resources
+            const linkSet = new Set();
+            resourceToNodes.forEach((nodeList, resource) => {
+                if (nodeList.length >= minLinks) {
+                    for (let i = 0; i < nodeList.length; i++) {
+                        for (let j = i + 1; j < nodeList.length; j++) {
+                            const linkId = [nodeList[i].id, nodeList[j].id].sort().join('-');
+                            if (!linkSet.has(linkId)) {
+                                linkSet.add(linkId);
+                                links.push({
+                                    source: nodeList[i].id,
+                                    target: nodeList[j].id,
+                                    resource: resource
+                                });
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Filter nodes to only include those with links
+            const connectedNodeIds = new Set();
+            links.forEach(link => {
+                connectedNodeIds.add(link.source);
+                connectedNodeIds.add(link.target);
+            });
+            const filteredNodes = nodes.filter(n => connectedNodeIds.has(n.id));
+
+            if (filteredNodes.length === 0) {
+                svg.append('text')
+                    .attr('x', 400)
+                    .attr('y', 200)
+                    .attr('text-anchor', 'middle')
+                    .attr('fill', '#999')
+                    .text('No connected tool calls found. Try adjusting filters.');
+                return;
+            }
+
+            // Set up SVG dimensions
+            const width = 1400;
+            const height = 800;
+            svg.attr('width', width).attr('height', height);
+
+            // Create force simulation
+            const simulation = d3.forceSimulation(filteredNodes)
+                .force('link', d3.forceLink(links).id(d => d.id).distance(100))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(30));
+
+            // Create zoom behavior
+            const g = svg.append('g');
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 4])
+                .on('zoom', (event) => {
+                    g.attr('transform', event.transform);
+                });
+            svg.call(zoom);
+
+            // Draw links
+            const link = g.append('g')
+                .selectAll('line')
+                .data(links)
+                .join('line')
+                .attr('class', 'cluster-link')
+                .attr('stroke-width', 1);
+
+            // Draw nodes
+            const node = g.append('g')
+                .selectAll('circle')
+                .data(filteredNodes)
+                .join('circle')
+                .attr('class', 'cluster-node')
+                .attr('r', d => 5 + Math.sqrt(d.weight) * 2)
+                .attr('fill', d => toolColors(d.toolName))
+                .attr('stroke', d => d.toolCall.weightCategory.color)
+                .attr('stroke-width', 2)
+                .attr('opacity', 0.8)
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended))
+                .on('mouseover', function(event, d) {
+                    const tooltip = document.getElementById('tooltip');
+                    tooltip.style.display = 'block';
+
+                    const resourcesText = d.resources.length > 0 ?
+                        d.resources.map(r => `<div>• ${r.type}: ${r.value}</div>`).join('') :
+                        '<div>• No resources identified</div>';
+
+                    tooltip.innerHTML = `
+                        <div class="tooltip-title">${d.toolName} by ${d.agentId}</div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Weight:</span>
+                            <span class="weight-badge weight-${d.toolCall.weightCategory.class}">
+                                ${d.weight.toFixed(1)}
+                            </span>
+                        </div>
+                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">
+                            <div class="tooltip-label">Resources:</div>
+                            ${resourcesText}
+                        </div>
+                    `;
+                    tooltip.style.left = event.pageX + 10 + 'px';
+                    tooltip.style.top = event.pageY + 10 + 'px';
+
+                    // Highlight connected nodes
+                    node.style('opacity', n => {
+                        if (n.id === d.id) return 1;
+                        const isConnected = links.some(l =>
+                            (l.source.id === d.id && l.target.id === n.id) ||
+                            (l.target.id === d.id && l.source.id === n.id)
+                        );
+                        return isConnected ? 0.8 : 0.2;
+                    });
+                    link.style('opacity', l =>
+                        (l.source.id === d.id || l.target.id === d.id) ? 0.8 : 0.1
+                    );
+                })
+                .on('mouseout', () => {
+                    document.getElementById('tooltip').style.display = 'none';
+                    node.style('opacity', 0.8);
+                    link.style('opacity', 0.3);
+                });
+
+            // Update positions on tick
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                node
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+            });
+
+            // Drag functions
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+
+            // Update legend
+            const legend = document.getElementById('clusterLegend');
+            const clusterStats = new Map();
+            resourceToNodes.forEach((nodeList, resource) => {
+                if (nodeList.length >= minLinks) {
+                    clusterStats.set(resource, nodeList.length);
+                }
+            });
+
+            const sortedClusters = Array.from(clusterStats.entries())
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            legend.innerHTML = `
+                <strong>Top Resource Clusters (by ${clusterBy}):</strong>
+                <div style="margin-top: 10px;">
+                    ${sortedClusters.map(([resource, count]) => `
+                        <div style="margin: 5px 0; padding: 5px; background: #f9f9f9; border-radius: 3px;">
+                            <strong>${resource || '(root)'}</strong>: ${count} tool calls
+                        </div>
+                    `).join('')}
+                </div>
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+                    <strong>Graph Statistics:</strong>
+                    <div style="margin-top: 5px;">
+                        • ${filteredNodes.length} connected tool calls<br>
+                        • ${links.length} connections<br>
+                        • ${clusterStats.size} resource clusters
+                    </div>
+                </div>
+            `;
+        }
+
+        // Load and process token file
+        function loadAndProcessTokenFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const lines = e.target.result.split('\n');
+                tokenData = lines
+                    .filter(line => line.trim())
+                    .map(line => {
+                        try {
+                            return JSON.parse(line);
+                        } catch (err) {
+                            return null;
+                        }
+                    })
+                    .filter(entry => entry && entry.message && entry.message.usage)
+                    .map(entry => ({
+                        timestamp: new Date(entry.timestamp),
+                        inputTokens: entry.message.usage.input_tokens || 0,
+                        cacheRead: entry.message.usage.cache_read_input_tokens || 0,
+                        cacheCreation: entry.message.usage.cache_creation_input_tokens || 0,
+                        outputTokens: entry.message.usage.output_tokens || 0
+                    }));
+
+                // Sort by timestamp
+                tokenData.sort((a, b) => a.timestamp - b.timestamp);
+
+                // Add cumulative totals
+                let cumInput = 0, cumCacheRead = 0, cumCacheCreation = 0, cumOutput = 0;
+                tokenData.forEach(d => {
+                    cumInput += d.inputTokens;
+                    cumCacheRead += d.cacheRead;
+                    cumCacheCreation += d.cacheCreation;
+                    cumOutput += d.outputTokens;
+                    d.cumInputTokens = cumInput;
+                    d.cumCacheRead = cumCacheRead;
+                    d.cumCacheCreation = cumCacheCreation;
+                    d.cumOutputTokens = cumOutput;
+                    d.cumTotal = cumInput + cumCacheRead + cumCacheCreation + cumOutput;
+                });
+
+                renderTokenTracking();
+            };
+            reader.readAsText(file);
+        }
+
+        // Track visibility state for each chart
+        const tokenChartVisibility = {
+            inputTokens: true,
+            cacheRead: true,
+            cacheCreation: true,
+            outputTokens: true
+        };
+
+        const cacheChartVisibility = {
+            cacheRead: true,
+            cacheCreation: true
+        };
+
+        const cumChartVisibility = {
+            cumInputTokens: true,
+            cumOutputTokens: true
+        };
+
+        // Render token tracking
+        function renderTokenTracking() {
+            if (!tokenData || tokenData.length === 0) {
+                document.getElementById('tokenStatsContainer').innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #666;">
+                        No token data loaded. Please select a session log JSONL file.
+                    </div>
+                `;
+                return;
+            }
+
+            // Calculate statistics
+            const totalInput = d3.sum(tokenData, d => d.inputTokens);
+            const totalCacheRead = d3.sum(tokenData, d => d.cacheRead);
+            const totalCacheCreation = d3.sum(tokenData, d => d.cacheCreation);
+            const totalOutput = d3.sum(tokenData, d => d.outputTokens);
+            const totalTokens = totalInput + totalCacheRead + totalCacheCreation + totalOutput;
+            const cacheHitRate = totalCacheCreation > 0
+                ? (totalCacheRead / (totalCacheRead + totalCacheCreation) * 100).toFixed(1)
+                : 0;
+
+            // Render stats cards
+            document.getElementById('tokenStatsContainer').innerHTML = `
+                <div class="stat-card success">
+                    <div class="stat-label">Total Tokens</div>
+                    <div class="stat-value">${totalTokens.toLocaleString()}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Input Tokens</div>
+                    <div class="stat-value">${totalInput.toLocaleString()}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Output Tokens</div>
+                    <div class="stat-value">${totalOutput.toLocaleString()}</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-label">Cache Hit Rate</div>
+                    <div class="stat-value">${cacheHitRate}%</div>
+                </div>
+            `;
+
+            // Chart dimensions
+            const margin = { top: 20, right: 180, bottom: 40, left: 60 };
+            const width = 500;
+            const height = 300;
+
+            // 1. Token Usage Over Time
+            const tokenSvg = d3.select('#tokenChart')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom);
+
+            tokenSvg.selectAll('*').remove();
+
+            const tokenG = tokenSvg.append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+
+            const xScale = d3.scaleTime()
+                .domain(d3.extent(tokenData, d => d.timestamp))
+                .range([0, width]);
+
+            const yScaleToken = d3.scaleLinear()
+                .domain([0, d3.max(tokenData, d => Math.max(
+                    d.inputTokens, d.cacheRead, d.cacheCreation, d.outputTokens
+                )) * 1.1])
+                .range([height, 0]);
+
+            // Axes
+            tokenG.append('g')
+                .attr('transform', `translate(0,${height})`)
+                .call(d3.axisBottom(xScale).ticks(5))
+                .selectAll('text')
+                .style('font-size', '11px');
+
+            tokenG.append('g')
+                .call(d3.axisLeft(yScaleToken).ticks(5))
+                .selectAll('text')
+                .style('font-size', '11px');
+
+            // Grid lines
+            tokenG.append('g')
+                .attr('class', 'grid')
+                .attr('opacity', 0.1)
+                .call(d3.axisLeft(yScaleToken)
+                    .ticks(5)
+                    .tickSize(-width)
+                    .tickFormat(''));
+
+            // Lines
+            const lineColors = {
+                inputTokens: '#4facfe',
+                cacheRead: '#43e97b',
+                cacheCreation: '#fa709a',
+                outputTokens: '#f093fb'
+            };
+
+            const lineGenerator = d3.line()
+                .x(d => xScale(d.timestamp))
+                .curve(d3.curveMonotoneX);
+
+            const tokenLines = {};
+            Object.entries(lineColors).forEach(([key, color]) => {
+                tokenLines[key] = {
+                    line: tokenG.append('path')
+                        .datum(tokenData)
+                        .attr('class', `line-${key}`)
+                        .attr('fill', 'none')
+                        .attr('stroke', color)
+                        .attr('stroke-width', 2)
+                        .attr('d', lineGenerator.y(d => yScaleToken(d[key])))
+                        .style('opacity', tokenChartVisibility[key] ? 1 : 0),
+                    points: tokenG.selectAll(`.point-${key}`)
+                        .data(tokenData)
+                        .join('circle')
+                        .attr('class', `point-${key}`)
+                        .attr('cx', d => xScale(d.timestamp))
+                        .attr('cy', d => yScaleToken(d[key]))
+                        .attr('r', 3)
+                        .attr('fill', color)
+                        .style('opacity', tokenChartVisibility[key] ? 0.7 : 0)
+                };
+            });
+
+            // Legend for token chart
+            const tokenLegend = [
+                { label: 'Input Tokens', color: lineColors.inputTokens },
+                { label: 'Cache Read', color: lineColors.cacheRead },
+                { label: 'Cache Creation', color: lineColors.cacheCreation },
+                { label: 'Output Tokens', color: lineColors.outputTokens }
+            ];
+
+            tokenLegend.forEach((item, i) => {
+                const key = Object.keys(lineColors)[i];
+                const legendG = tokenG.append('g')
+                    .attr('transform', `translate(${width + 20}, ${10 + i * 22})`)
+                    .style('cursor', 'pointer')
+                    .on('click', function() {
+                        tokenChartVisibility[key] = !tokenChartVisibility[key];
+                        const visible = tokenChartVisibility[key];
+
+                        // Toggle line and points
+                        tokenLines[key].line.style('opacity', visible ? 1 : 0);
+                        tokenLines[key].points.style('opacity', visible ? 0.7 : 0);
+
+                        // Update legend appearance
+                        d3.select(this).select('line')
+                            .style('opacity', visible ? 1 : 0.3);
+                        d3.select(this).select('text')
+                            .style('opacity', visible ? 1 : 0.4)
+                            .style('text-decoration', visible ? 'none' : 'line-through');
+                    });
+
+                legendG.append('line')
+                    .attr('x1', 0)
+                    .attr('x2', 20)
+                    .attr('y1', 0)
+                    .attr('y2', 0)
+                    .attr('stroke', item.color)
+                    .attr('stroke-width', 2)
+                    .style('opacity', tokenChartVisibility[key] ? 1 : 0.3);
+
+                legendG.append('text')
+                    .attr('x', 25)
+                    .attr('y', 4)
+                    .style('font-size', '10px')
+                    .style('opacity', tokenChartVisibility[key] ? 1 : 0.4)
+                    .style('text-decoration', tokenChartVisibility[key] ? 'none' : 'line-through')
+                    .text(item.label);
+            });
+
+            // 2. Cache Efficiency Chart
+            const cacheSvg = d3.select('#cacheChart')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom);
+
+            cacheSvg.selectAll('*').remove();
+
+            const cacheG = cacheSvg.append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+
+            const yScaleCache = d3.scaleLinear()
+                .domain([0, d3.max(tokenData, d => Math.max(d.cacheRead, d.cacheCreation)) * 1.1])
+                .range([height, 0]);
+
+            // Axes
+            cacheG.append('g')
+                .attr('transform', `translate(0,${height})`)
+                .call(d3.axisBottom(xScale).ticks(5))
+                .selectAll('text')
+                .style('font-size', '11px');
+
+            cacheG.append('g')
+                .call(d3.axisLeft(yScaleCache).ticks(5))
+                .selectAll('text')
+                .style('font-size', '11px');
+
+            // Grid
+            cacheG.append('g')
+                .attr('class', 'grid')
+                .attr('opacity', 0.1)
+                .call(d3.axisLeft(yScaleCache)
+                    .ticks(5)
+                    .tickSize(-width)
+                    .tickFormat(''));
+
+            // Cache Read (hits) - Area
+            const areaGenerator = d3.area()
+                .x(d => xScale(d.timestamp))
+                .y0(height)
+                .y1(d => yScaleCache(d.cacheRead))
+                .curve(d3.curveMonotoneX);
+
+            const cacheReadArea = cacheG.append('path')
+                .datum(tokenData)
+                .attr('fill', lineColors.cacheRead)
+                .attr('opacity', cacheChartVisibility.cacheRead ? 0.3 : 0)
+                .attr('d', areaGenerator);
+
+            const cacheReadLine = cacheG.append('path')
+                .datum(tokenData)
+                .attr('fill', 'none')
+                .attr('stroke', lineColors.cacheRead)
+                .attr('stroke-width', 2)
+                .attr('d', lineGenerator.y(d => yScaleCache(d.cacheRead)))
+                .style('opacity', cacheChartVisibility.cacheRead ? 1 : 0);
+
+            // Cache Creation (misses) - Area
+            const areaMissGenerator = d3.area()
+                .x(d => xScale(d.timestamp))
+                .y0(height)
+                .y1(d => yScaleCache(d.cacheCreation))
+                .curve(d3.curveMonotoneX);
+
+            const cacheCreationArea = cacheG.append('path')
+                .datum(tokenData)
+                .attr('fill', lineColors.cacheCreation)
+                .attr('opacity', cacheChartVisibility.cacheCreation ? 0.3 : 0)
+                .attr('d', areaMissGenerator);
+
+            const cacheCreationLine = cacheG.append('path')
+                .datum(tokenData)
+                .attr('fill', 'none')
+                .attr('stroke', lineColors.cacheCreation)
+                .attr('stroke-width', 2)
+                .attr('d', lineGenerator.y(d => yScaleCache(d.cacheCreation)))
+                .style('opacity', cacheChartVisibility.cacheCreation ? 1 : 0);
+
+            const cacheLines = {
+                cacheRead: { area: cacheReadArea, line: cacheReadLine },
+                cacheCreation: { area: cacheCreationArea, line: cacheCreationLine }
+            };
+
+            // Legend
+            const cacheLegend = [
+                { label: 'Cache Read (Hits)', color: lineColors.cacheRead },
+                { label: 'Cache Creation (Misses)', color: lineColors.cacheCreation }
+            ];
+
+            cacheLegend.forEach((item, i) => {
+                const key = i === 0 ? 'cacheRead' : 'cacheCreation';
+                const legendG = cacheG.append('g')
+                    .attr('transform', `translate(${width + 20}, ${10 + i * 30})`)
+                    .style('cursor', 'pointer')
+                    .on('click', function() {
+                        cacheChartVisibility[key] = !cacheChartVisibility[key];
+                        const visible = cacheChartVisibility[key];
+
+                        // Toggle area and line
+                        cacheLines[key].area.attr('opacity', visible ? 0.3 : 0);
+                        cacheLines[key].line.style('opacity', visible ? 1 : 0);
+
+                        // Update legend appearance
+                        d3.select(this).select('rect')
+                            .style('opacity', visible ? 0.5 : 0.2);
+                        d3.select(this).select('text')
+                            .style('opacity', visible ? 1 : 0.4)
+                            .style('text-decoration', visible ? 'none' : 'line-through');
+                    });
+
+                legendG.append('rect')
+                    .attr('x', 0)
+                    .attr('y', -8)
+                    .attr('width', 20)
+                    .attr('height', 10)
+                    .attr('fill', item.color)
+                    .style('opacity', cacheChartVisibility[key] ? 0.5 : 0.2);
+
+                legendG.append('text')
+                    .attr('x', 25)
+                    .attr('y', 0)
+                    .style('font-size', '10px')
+                    .style('opacity', cacheChartVisibility[key] ? 1 : 0.4)
+                    .style('text-decoration', cacheChartVisibility[key] ? 'none' : 'line-through')
+                    .text(item.label);
+            });
+
+            // 3. Cumulative Token Usage - Input vs Output
+            const cumSvg = d3.select('#cumulativeChart')
+                .attr('width', width * 2 + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom);
+
+            cumSvg.selectAll('*').remove();
+
+            const cumG = cumSvg.append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+
+            const xScaleCum = d3.scaleTime()
+                .domain(d3.extent(tokenData, d => d.timestamp))
+                .range([0, width * 2]);
+
+            const yScaleCum = d3.scaleLinear()
+                .domain([0, d3.max(tokenData, d => Math.max(d.cumInputTokens, d.cumOutputTokens)) * 1.05])
+                .range([height, 0]);
+
+            // Axes
+            cumG.append('g')
+                .attr('transform', `translate(0,${height})`)
+                .call(d3.axisBottom(xScaleCum).ticks(8))
+                .selectAll('text')
+                .style('font-size', '11px');
+
+            cumG.append('g')
+                .call(d3.axisLeft(yScaleCum).ticks(5))
+                .selectAll('text')
+                .style('font-size', '11px');
+
+            // Grid
+            cumG.append('g')
+                .attr('class', 'grid')
+                .attr('opacity', 0.1)
+                .call(d3.axisLeft(yScaleCum)
+                    .ticks(5)
+                    .tickSize(-width * 2)
+                    .tickFormat(''));
+
+            // Line generator
+            const cumLineGenerator = d3.line()
+                .x(d => xScaleCum(d.timestamp))
+                .curve(d3.curveMonotoneX);
+
+            // Cumulative Input Tokens (area + line)
+            const inputAreaGen = d3.area()
+                .x(d => xScaleCum(d.timestamp))
+                .y0(height)
+                .y1(d => yScaleCum(d.cumInputTokens))
+                .curve(d3.curveMonotoneX);
+
+            const cumInputArea = cumG.append('path')
+                .datum(tokenData)
+                .attr('fill', lineColors.inputTokens)
+                .attr('opacity', cumChartVisibility.cumInputTokens ? 0.3 : 0)
+                .attr('d', inputAreaGen);
+
+            const cumInputLine = cumG.append('path')
+                .datum(tokenData)
+                .attr('fill', 'none')
+                .attr('stroke', lineColors.inputTokens)
+                .attr('stroke-width', 3)
+                .attr('d', cumLineGenerator.y(d => yScaleCum(d.cumInputTokens)))
+                .style('opacity', cumChartVisibility.cumInputTokens ? 1 : 0);
+
+            // Cumulative Output Tokens (area + line)
+            const outputAreaGen = d3.area()
+                .x(d => xScaleCum(d.timestamp))
+                .y0(height)
+                .y1(d => yScaleCum(d.cumOutputTokens))
+                .curve(d3.curveMonotoneX);
+
+            const cumOutputArea = cumG.append('path')
+                .datum(tokenData)
+                .attr('fill', lineColors.outputTokens)
+                .attr('opacity', cumChartVisibility.cumOutputTokens ? 0.3 : 0)
+                .attr('d', outputAreaGen);
+
+            const cumOutputLine = cumG.append('path')
+                .datum(tokenData)
+                .attr('fill', 'none')
+                .attr('stroke', lineColors.outputTokens)
+                .attr('stroke-width', 3)
+                .attr('d', cumLineGenerator.y(d => yScaleCum(d.cumOutputTokens)))
+                .style('opacity', cumChartVisibility.cumOutputTokens ? 1 : 0);
+
+            const cumLines = {
+                cumInputTokens: { area: cumInputArea, line: cumInputLine },
+                cumOutputTokens: { area: cumOutputArea, line: cumOutputLine }
+            };
+
+            // Legend
+            const cumLegend = [
+                { label: 'Cumulative Input Tokens', color: lineColors.inputTokens },
+                { label: 'Cumulative Output Tokens', color: lineColors.outputTokens }
+            ];
+
+            cumLegend.forEach((item, i) => {
+                const key = i === 0 ? 'cumInputTokens' : 'cumOutputTokens';
+                const legendG = cumG.append('g')
+                    .attr('transform', `translate(${width * 2 + 20}, ${10 + i * 30})`)
+                    .style('cursor', 'pointer')
+                    .on('click', function() {
+                        cumChartVisibility[key] = !cumChartVisibility[key];
+                        const visible = cumChartVisibility[key];
+
+                        // Toggle area and line
+                        cumLines[key].area.attr('opacity', visible ? 0.3 : 0);
+                        cumLines[key].line.style('opacity', visible ? 1 : 0);
+
+                        // Update legend appearance
+                        d3.select(this).select('line')
+                            .style('opacity', visible ? 1 : 0.3);
+                        d3.select(this).select('text')
+                            .style('opacity', visible ? 1 : 0.4)
+                            .style('text-decoration', visible ? 'none' : 'line-through');
+                    });
+
+                legendG.append('line')
+                    .attr('x1', 0)
+                    .attr('x2', 25)
+                    .attr('y1', 0)
+                    .attr('y2', 0)
+                    .attr('stroke', item.color)
+                    .attr('stroke-width', 3)
+                    .style('opacity', cumChartVisibility[key] ? 1 : 0.3);
+
+                legendG.append('text')
+                    .attr('x', 30)
+                    .attr('y', 4)
+                    .style('font-size', '10px')
+                    .style('opacity', cumChartVisibility[key] ? 1 : 0.4)
+                    .style('text-decoration', cumChartVisibility[key] ? 'none' : 'line-through')
+                    .text(item.label);
+            });
+
+            // Y-axis label
+            cumG.append('text')
+                .attr('transform', 'rotate(-90)')
+                .attr('y', -45)
+                .attr('x', -height / 2)
+                .attr('text-anchor', 'middle')
+                .style('font-size', '12px')
+                .text('Cumulative Tokens');
+        }
+
+        // Render text analysis
+        function renderTextAnalysis() {
+            if (!textBlockData || textBlockData.length === 0) {
+                document.getElementById('textStatsContainer').innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #666;">
+                        No text block data available. Make sure you're using the updated SDK that logs text blocks.
+                    </div>
+                `;
+                return;
+            }
+
+            // Sort data by timestamp
+            const sortedData = [...textBlockData].sort((a, b) => a.timestamp - b.timestamp);
+
+            // Estimate tokens (rough approximation: 1 token ≈ 4 characters for English text)
+            const dataWithTokens = sortedData.map(d => ({
+                ...d,
+                estimatedTokens: Math.round(d.textLength / 4)
+            }));
+
+            // Calculate statistics
+            const totalBlocks = dataWithTokens.length;
+            const totalTokens = d3.sum(dataWithTokens, d => d.estimatedTokens);
+            const avgTokens = d3.mean(dataWithTokens, d => d.estimatedTokens);
+            const maxTokens = d3.max(dataWithTokens, d => d.estimatedTokens);
+
+            // Render stats cards
+            document.getElementById('textStatsContainer').innerHTML = `
+                <div class="stat-card success">
+                    <div class="stat-label">Total Text Blocks</div>
+                    <div class="stat-value">${totalBlocks.toLocaleString()}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Tokens (est.)</div>
+                    <div class="stat-value">${totalTokens.toLocaleString()}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg Tokens/Block</div>
+                    <div class="stat-value">${Math.round(avgTokens)}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Max Tokens/Block</div>
+                    <div class="stat-value">${maxTokens.toLocaleString()}</div>
+                </div>
+            `;
+
+            // Chart dimensions
+            const margin = { top: 40, right: 80, bottom: 60, left: 80 };
+            const width = 1200;
+            const height = 400;
+
+            // Create SVG
+            const svg = d3.select('#textFrequencyChart')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom);
+
+            svg.selectAll('*').remove();
+
+            const g = svg.append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+
+            // Scales
+            const minTime = d3.min(dataWithTokens, d => d.timestamp);
+            const xScale = d3.scaleLinear()
+                .domain([0, dataWithTokens.length - 1])
+                .range([0, width]);
+
+            const yScale = d3.scaleLinear()
+                .domain([0, maxTokens * 1.1])
+                .range([height, 0]);
+
+            // Axes
+            g.append('g')
+                .attr('transform', `translate(0,${height})`)
+                .call(d3.axisBottom(xScale).ticks(10).tickFormat(d => `#${d + 1}`))
+                .selectAll('text')
+                .style('font-size', '11px')
+                .attr('transform', 'rotate(-45)')
+                .style('text-anchor', 'end');
+
+            g.append('g')
+                .call(d3.axisLeft(yScale).ticks(10))
+                .selectAll('text')
+                .style('font-size', '11px');
+
+            // Axis labels
+            g.append('text')
+                .attr('x', width / 2)
+                .attr('y', height + 50)
+                .attr('text-anchor', 'middle')
+                .style('font-size', '12px')
+                .style('font-weight', 'bold')
+                .text('Text Block Sequence');
+
+            g.append('text')
+                .attr('transform', 'rotate(-90)')
+                .attr('x', -height / 2)
+                .attr('y', -60)
+                .attr('text-anchor', 'middle')
+                .style('font-size', '12px')
+                .style('font-weight', 'bold')
+                .text('Estimated Tokens');
+
+            // Title
+            g.append('text')
+                .attr('x', width / 2)
+                .attr('y', -20)
+                .attr('text-anchor', 'middle')
+                .style('font-size', '14px')
+                .style('font-weight', 'bold')
+                .text('Token Count per Text Block Over Time');
+
+            // Color scale by agent
+            const agents = Array.from(new Set(dataWithTokens.map(d => d.agentId)));
+            const colorScale = d3.scaleOrdinal()
+                .domain(agents)
+                .range(d3.schemeCategory10);
+
+            // Draw line
+            const line = d3.line()
+                .x((d, i) => xScale(i))
+                .y(d => yScale(d.estimatedTokens))
+                .curve(d3.curveMonotoneX);
+
+            g.append('path')
+                .datum(dataWithTokens)
+                .attr('fill', 'none')
+                .attr('stroke', '#667eea')
+                .attr('stroke-width', 2)
+                .attr('d', line)
+                .attr('opacity', 0.7);
+
+            // Draw points
+            g.selectAll('circle')
+                .data(dataWithTokens)
+                .join('circle')
+                .attr('cx', (d, i) => xScale(i))
+                .attr('cy', d => yScale(d.estimatedTokens))
+                .attr('r', 5)
+                .attr('fill', d => colorScale(d.agentId))
+                .attr('stroke', '#333')
+                .attr('stroke-width', 1)
+                .attr('opacity', 0.8)
+                .style('cursor', 'pointer')
+                .on('mouseover', function(event, d) {
+                    d3.select(this).attr('r', 8).attr('opacity', 1);
+                    const tooltip = document.getElementById('tooltip');
+                    tooltip.style.display = 'block';
+                    tooltip.innerHTML = `
+                        <div class="tooltip-title">📝 Text Block</div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Agent:</span>
+                            <span>${d.agentId}</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Time:</span>
+                            <span>${d.timestamp.toLocaleTimeString()}</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Tokens (est.):</span>
+                            <span>${d.estimatedTokens.toLocaleString()}</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Characters:</span>
+                            <span>${d.textLength.toLocaleString()}</span>
+                        </div>
+                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">
+                            <div class="tooltip-label">Preview:</div>
+                            <div style="font-size: 11px; margin-top: 4px; max-width: 300px; word-break: break-word;">
+                                ${d.text.substring(0, 150)}${d.text.length > 150 ? '...' : ''}
+                            </div>
+                        </div>
+                    `;
+                    tooltip.style.left = event.pageX + 10 + 'px';
+                    tooltip.style.top = event.pageY + 10 + 'px';
+                })
+                .on('mouseout', function() {
+                    d3.select(this).attr('r', 5).attr('opacity', 0.8);
+                    document.getElementById('tooltip').style.display = 'none';
+                });
+
+            // Legend
+            const legend = g.append('g')
+                .attr('transform', `translate(${width + 10}, 0)`);
+
+            legend.append('text')
+                .attr('x', 0)
+                .attr('y', 0)
+                .style('font-size', '12px')
+                .style('font-weight', 'bold')
+                .text('Agents');
+
+            agents.forEach((agent, i) => {
+                const legendItem = legend.append('g')
+                    .attr('transform', `translate(0, ${20 + i * 25})`);
+
+                legendItem.append('circle')
+                    .attr('cx', 8)
+                    .attr('cy', 0)
+                    .attr('r', 5)
+                    .attr('fill', colorScale(agent))
+                    .attr('stroke', '#333')
+                    .attr('stroke-width', 1);
+
+                legendItem.append('text')
+                    .attr('x', 20)
+                    .attr('y', 4)
+                    .style('font-size', '11px')
+                    .text(agent);
+            });
+
+            // Hide unused charts
+            d3.select('#textLengthChart').style('display', 'none');
+            d3.select('#textByAgentChart').style('display', 'none');
+        }
+
+        // Render all
+        function renderAll() {
+            renderStats();
+            renderTimeline();
+            renderLifespan();
+            renderAnalysis();
+            renderClustering();
+            attachClusteringListeners();
+            if (textBlockData.length > 0) {
+                renderTextAnalysis();
+            }
+            if (tokenData.length > 0) {
+                renderTokenTracking();
+            }
+        }
+
+        // Initial message
+        document.getElementById('timelineContainer').innerHTML = `
+            <div style="text-align: center; padding: 60px 20px; color: #666;">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom: 20px;">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="12" y1="18" x2="12" y2="12"></line>
+                    <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+                <h3 style="margin-bottom: 10px;">No data loaded</h3>
+                <p>Please select a tool_calls.jsonl file to visualize</p>
+            </div>
+        `;
+    </script>
+</body>
+</html>
