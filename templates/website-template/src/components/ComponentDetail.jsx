@@ -15,8 +15,8 @@ function ComponentDetail({ components = [] }) {
           <div className="error-icon">❌</div>
           <h2>Component not found</h2>
           <p>The component "{componentName}" could not be found.</p>
-          <Link to="/components" className="button-primary">
-            ← Back to Components
+          <Link to="/" className="button-primary">
+            ← Back to Dashboard
           </Link>
         </div>
       </div>
@@ -42,7 +42,7 @@ function ComponentDetail({ components = [] }) {
           </div>
         </div>
         {component.hasApiDocs && (
-          <Link to={`/components/${component.name}/api`} className="button-primary">
+          <Link to={`/${component.name}/api`} className="button-primary">
             📖 View API Documentation
           </Link>
         )}
@@ -73,14 +73,39 @@ function ComponentDetail({ components = [] }) {
         </div>
       )}
 
-      {component.system_flows && component.system_flows.length > 0 && (
+      {component.systemFlows && (
         <div className="card">
           <h2>🔄 System Flows</h2>
-          <ul className="flow-list">
-            {component.system_flows.map((flow, idx) => (
-              <li key={idx}>{flow}</li>
-            ))}
-          </ul>
+          {Array.isArray(component.systemFlows) ? (
+            <ul className="flow-list">
+              {component.systemFlows.map((flow, idx) => (
+                <li key={idx}>{flow}</li>
+              ))}
+            </ul>
+          ) : (
+            <MarkdownContent content={component.systemFlows} />
+          )}
+        </div>
+      )}
+
+      {component.dataFlows && (
+        <div className="card">
+          <h2>🌊 Data Flows</h2>
+          <MarkdownContent content={component.dataFlows} />
+        </div>
+      )}
+
+      {component.externalDependencies && (
+        <div className="card">
+          <h2>📦 External Dependencies</h2>
+          <MarkdownContent content={component.externalDependencies} />
+        </div>
+      )}
+
+      {component.internalDependencies && (
+        <div className="card">
+          <h2>🔗 Internal Dependencies</h2>
+          <MarkdownContent content={component.internalDependencies} />
         </div>
       )}
 
@@ -97,7 +122,7 @@ function ComponentDetail({ components = [] }) {
 
       {component.external_dependencies && component.external_dependencies.length > 0 && (
         <div className="card">
-          <h2>🔗 External Dependencies</h2>
+          <h2>🔗 External Dependencies (Legacy)</h2>
           <ul className="dependency-list">
             {component.external_dependencies.map((dep, idx) => (
               <li key={idx}>{dep}</li>

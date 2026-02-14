@@ -58,7 +58,7 @@ function SearchModal({ isOpen, onClose, components = [] }) {
   }, [isOpen, selectedIndex, filteredComponents, onClose]);
 
   const handleSelect = (component) => {
-    navigate(`/components/${component.name}`);
+    navigate(`/${component.name}`);
     onClose();
   };
 

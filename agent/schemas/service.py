@@ -28,8 +28,8 @@ class Application(BaseComponent):
     """
 
     libraries_used: List[str] = field(default_factory=list)  # Internal libraries this application uses
-    caller_dependencies: List[str] = field(default_factory=list)  # Applications that call this application
-    callee_dependencies: List[str] = field(default_factory=list)  # Applications that this application calls
+    external_dependencies: List[str] = field(default_factory=list)  # Applications that call this application
+    internal_dependencies: List[str] = field(default_factory=list)  # Applications that this application calls
     # Note: external_dependencies inherited from BaseComponent represents third-party apps this integrates with
 
     def to_dict(self) -> dict:
@@ -43,8 +43,8 @@ class Application(BaseComponent):
             "description": self.description,
             "external_dependencies": self.external_dependencies,
             "libraries_used": self.libraries_used,
-            "caller_dependencies": self.caller_dependencies,
-            "callee_dependencies": self.callee_dependencies,
+            "external_dependencies": self.external_dependencies,
+            "internal_dependencies": self.internal_dependencies,
             "key_files": [str(f) for f in self.key_files],
             "metadata": self.metadata,
         }
@@ -60,8 +60,7 @@ class Application(BaseComponent):
             description=data["description"],
             external_dependencies=data.get("external_dependencies", []),
             libraries_used=data.get("libraries_used", []),
-            caller_dependencies=data.get("caller_dependencies", []),
-            callee_dependencies=data.get("callee_dependencies", []),
+            internal_dependencies=data.get("internal_dependencies", []),
             key_files=[Path(f) for f in data.get("key_files", [])],
             metadata=data.get("metadata", {}),
         )

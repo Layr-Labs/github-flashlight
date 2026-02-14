@@ -184,7 +184,7 @@ function ComponentDetails({ searchQuery }) {
         <div className="not-found">
           <h2>Component Not Found</h2>
           <p>The component "{componentName}" could not be found.</p>
-          <Link to="/components" className="back-link">← Back to components</Link>
+          <Link to="/" className="back-link">← Back to dashboard</Link>
         </div>
       </div>
     );
@@ -246,7 +246,7 @@ function ComponentDetails({ searchQuery }) {
     return (
       <div className="component-details">
         <div className="component-header">
-          <Link to="/components" className="back-link">← Back to components</Link>
+          <Link to="/" className="back-link">← Back to dashboard</Link>
           <h1>{selectedComponent.name}</h1>
           <div className="component-badges">
             <span className={`badge ${selectedComponent.classification}`}>
@@ -269,7 +269,7 @@ function ComponentDetails({ searchQuery }) {
               <ul className="dependency-list">
                 {dependencies.map((dep, i) => dep && (
                   <li key={i}>
-                    <Link to={`/components/${dep.name}`} className="dependency-link">
+                    <Link to={`/${dep.name}`} className="dependency-link">
                       {dep.name}
                     </Link>
                     <span className="dependency-desc">{dep.description}</span>
@@ -286,7 +286,7 @@ function ComponentDetails({ searchQuery }) {
               <ul className="dependency-list">
                 {dependents.map((dep, i) => dep && (
                   <li key={i}>
-                    <Link to={`/components/${dep.name}`} className="dependency-link">
+                    <Link to={`/${dep.name}`} className="dependency-link">
                       {dep.name}
                     </Link>
                     <span className="dependency-desc">{dep.description}</span>
@@ -304,11 +304,11 @@ function ComponentDetails({ searchQuery }) {
                 {interactions.map((interaction, i) => (
                   <div key={i} className="interaction-card">
                     <div className="interaction-flow">
-                      <Link to={`/components/${interaction.from}`} className="interaction-node">
+                      <Link to={`/${interaction.from}`} className="interaction-node">
                         {interaction.from}
                       </Link>
                       <span className="interaction-arrow">→</span>
-                      <Link to={`/components/${interaction.to}`} className="interaction-node">
+                      <Link to={`/${interaction.to}`} className="interaction-node">
                         {interaction.to}
                       </Link>
                     </div>
@@ -497,7 +497,7 @@ function ComponentDetails({ searchQuery }) {
             {applications.map((component, i) => (
               <Link
                 key={i}
-                to={`/components/${component.name}`}
+                to={`/${component.name}`}
                 className="component-card"
               >
                 <div className="component-card-header">
@@ -518,7 +518,7 @@ function ComponentDetails({ searchQuery }) {
             {libraries.map((component, i) => (
               <Link
                 key={i}
-                to={`/components/${component.name}`}
+                to={`/${component.name}`}
                 className="component-card"
               >
                 <div className="component-card-header">

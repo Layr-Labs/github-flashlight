@@ -323,7 +323,7 @@ function Dashboard() {
             <ul className="component-list">
               {applications.map((comp, i) => (
                 <li key={i}>
-                  <Link to={`/components/${comp.name}`} className="component-link">
+                  <Link to={`/${comp.name}`} className="component-link">
                     {comp.name}
                   </Link>
                   <span className="component-type">{comp.type}</span>
@@ -336,7 +336,7 @@ function Dashboard() {
             <ul className="component-list">
               {libraries.map((comp, i) => (
                 <li key={i}>
-                  <Link to={`/components/${comp.name}`} className="component-link">
+                  <Link to={`/${comp.name}`} className="component-link">
                     {comp.name}
                   </Link>
                   <span className="component-type">{comp.type}</span>
@@ -406,10 +406,6 @@ function Dashboard() {
           <Link to="/application-graph" className="quick-link-card">
             <h4>Application Graph</h4>
             <p>Explore how applications communicate</p>
-          </Link>
-          <Link to="/components" className="quick-link-card">
-            <h4>Component Details</h4>
-            <p>Browse detailed documentation for each component</p>
           </Link>
         </div>
       </section>

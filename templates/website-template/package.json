@@ -13,9 +13,8 @@
     "react-scripts": "5.0.1",
     "react-markdown": "^9.0.1",
     "remark-gfm": "^4.0.0",
-    "rehype-highlight": "^7.0.0",
-    "rehype-raw": "^7.0.0",
-    "highlight.js": "^11.9.0"
+    "highlight.js": "^11.9.0",
+    "mermaid": "^10.6.1"
   },
   "scripts": {
     "start": "react-scripts start",

@@ -139,7 +139,7 @@ function DependencyGraph({ data = {}, services = [] }) {
       .on('click', (event, d) => {
         event.stopPropagation();
         if (!d.isThirdParty) {
-          navigate(`/components/${d.id}`);
+          navigate(`/${d.id}`);
         }
       })
       .on('mouseover', function(event, d) {

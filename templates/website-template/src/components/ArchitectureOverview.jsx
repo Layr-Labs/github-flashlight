@@ -76,9 +76,7 @@ function ArchitectureOverview({ data }) {
 
       <div className="cta-section">
         <h2>Ready to explore?</h2>
-        <Link to="/components" className="button-primary">
-          🔍 Browse All Components
-        </Link>
+        <p>Click on any component in the list above or explore the graphs to learn more.</p>
       </div>
     </div>
   );

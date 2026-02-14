@@ -45,15 +45,6 @@ function App() {
                 Application Graph
               </Link>
             </li>
-            <li className="nav-item">
-              <Link
-                to="/components"
-                className={`nav-link ${currentView === 'components' ? 'active' : ''}`}
-                onClick={() => setCurrentView('components')}
-              >
-                Components
-              </Link>
-            </li>
           </ul>
 
           <div className="search-container">
@@ -72,8 +63,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/library-graph" element={<LibraryGraph searchQuery={searchQuery} />} />
             <Route path="/application-graph" element={<ApplicationGraph searchQuery={searchQuery} />} />
-            <Route path="/components" element={<ComponentDetails searchQuery={searchQuery} />} />
-            <Route path="/components/:componentName" element={<ComponentDetails />} />
+            <Route path="/:componentName" element={<ComponentDetails />} />
           </Routes>
         </main>
       </div>

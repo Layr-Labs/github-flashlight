@@ -29,11 +29,8 @@ function Header({ onSearchToggle }) {
           <h1>📊 Code Explorer</h1>
         </Link>
         <nav className="nav">
-          <Link to="/" className={isActive('/') && !isActive('/components') ? 'nav-link active' : 'nav-link'}>
+          <Link to="/" className={isActive('/') ? 'nav-link active' : 'nav-link'}>
             🏠 Home
-          </Link>
-          <Link to="/components" className={isActive('/components') ? 'nav-link active' : 'nav-link'}>
-            🔍 Components
           </Link>
           <button className="search-toggle-btn" onClick={onSearchToggle} title="Search (⌘K)">
             <span className="search-icon">🔍</span>

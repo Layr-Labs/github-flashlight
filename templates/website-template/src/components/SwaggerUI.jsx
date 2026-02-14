@@ -16,8 +16,8 @@ function SwaggerUI({ components = [] }) {
           <div className="error-icon">❌</div>
           <h2>Component not found</h2>
           <p>The component "{componentName}" could not be found.</p>
-          <Link to="/components" className="button-primary">
-            ← Back to Components
+          <Link to="/" className="button-primary">
+            ← Back to Dashboard
           </Link>
         </div>
       </div>
@@ -31,7 +31,7 @@ function SwaggerUI({ components = [] }) {
           <div className="error-icon">📖</div>
           <h2>No API Documentation Available</h2>
           <p>The component "{componentName}" does not have OpenAPI documentation.</p>
-          <Link to={`/components/${componentName}`} className="button-primary">
+          <Link to={`/${componentName}`} className="button-primary">
             ← Back to Component Details
           </Link>
         </div>
@@ -49,7 +49,7 @@ function SwaggerUI({ components = [] }) {
           <h1>📖 {component.name} API Documentation</h1>
           <p className="subtitle">Interactive API specification and testing interface</p>
         </div>
-        <Link to={`/components/${componentName}`} className="button-secondary">
+        <Link to={`/${componentName}`} className="button-secondary">
           View Component Details
         </Link>
       </div>

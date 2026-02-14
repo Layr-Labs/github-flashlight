@@ -1,20 +1,20 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
-import rehypeRaw from 'rehype-raw';
+import hljs from 'highlight.js';
+import MermaidDiagram from './MermaidDiagram';
 import '../styles/markdown.css';
+import 'highlight.js/styles/github-dark.css';
 
 /**
  * Reusable markdown content renderer with syntax highlighting and GFM support.
  *
  * Features:
  * - GitHub Flavored Markdown (tables, task lists, strikethrough)
- * - Syntax highlighting for code blocks
- * - Sanitized HTML support
+ * - Syntax highlighting for code blocks using highlight.js
+ * - Mermaid diagram support
  * - Consistent styling across all markdown content
  * - External links open in new tab
- * - Language labels on code blocks
  */
 function MarkdownContent({ content, className = '' }) {
   if (!content) {
@@ -25,7 +25,6 @@ function MarkdownContent({ content, className = '' }) {
     <div className={`markdown-content ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight, rehypeRaw]}
         components={{
           // Custom rendering for links - open external links in new tab
           a: ({ node, href, children, ...props }) => {
@@ -41,23 +40,46 @@ function MarkdownContent({ content, className = '' }) {
               </a>
             );
           },
-          // Custom rendering for code blocks - add language label
+          // Custom rendering for code blocks with syntax highlighting
           code: ({ node, inline, className, children, ...props }) => {
-            if (inline) {
-              return <code className={className} {...props}>{children}</code>;
-            }
-
-            // Block code with language
             const match = /language-(\w+)/.exec(className || '');
             const language = match ? match[1] : '';
+            const codeString = String(children).replace(/\n$/, '');
 
+            // Handle mermaid diagrams
+            if (!inline && language === 'mermaid') {
+              return <MermaidDiagram chart={codeString} />;
+            }
+
+            // Handle code blocks with syntax highlighting
+            if (!inline && language) {
+              try {
+                const highlighted = hljs.highlight(codeString, {
+                  language: language,
+                  ignoreIllegals: true
+                });
+                return (
+                  <code
+                    className={`${className} hljs`}
+                    dangerouslySetInnerHTML={{ __html: highlighted.value }}
+                    {...props}
+                  />
+                );
+              } catch (e) {
+                // Fallback if language not supported
+                return (
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                );
+              }
+            }
+
+            // Inline code
             return (
-              <div className="code-block-wrapper">
-                {language && <div className="code-language">{language}</div>}
-                <code className={className} {...props}>
-                  {children}
-                </code>
-              </div>
+              <code className={className} {...props}>
+                {children}
+              </code>
             );
           },
         }}

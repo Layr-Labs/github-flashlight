@@ -60,8 +60,7 @@ def load_components(components_file: Path) -> tuple[list[Library], list[Applicat
             manifest_path=Path(app['manifest_path']) if app.get('manifest_path') else None,
             external_dependencies=app.get('external_dependencies', []),  # Third-party apps
             libraries_used=app.get('libraries_used', []),  # Internal libraries
-            caller_dependencies=app.get('caller_dependencies', []),  # Apps that call this one
-            callee_dependencies=app.get('callee_dependencies', []),  # Apps this one calls
+            internal_dependencies=app.get('internal_dependencies', []),  # Apps this one calls
             key_files=[Path(f) for f in app.get('key_files', [])]
         ))
 
@@ -166,8 +165,7 @@ def build_application_graph_json(applications: list[Application], libraries: lis
             'classification': 'application',
             'libraries_used': libraries_used,
             'external_dependencies': app.external_dependencies,  # Third-party apps
-            'caller_dependencies': app.caller_dependencies,  # Apps that call this one
-            'callee_dependencies': app.callee_dependencies,  # Apps this one calls
+            'internal_dependencies': app.internal_dependencies,  # Apps this one calls
             'key_files': [str(f) for f in app.key_files]
         })
 

@@ -62,7 +62,7 @@ function ComponentList({ components = [] }) {
           {filteredComponents.map(component => (
             <Link
               key={component.name}
-              to={`/components/${component.name}`}
+              to={`/${component.name}`}
               className="component-card"
             >
               <div className="component-header">

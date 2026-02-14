@@ -33,6 +33,7 @@ class SubagentSession:
     description: str
     prompt_preview: str
     subagent_id: str  # Unique identifier like "RESEARCHER-1"
+    sdk_agent_id: Optional[str] = None  # SDK-provided agent ID (e.g., "a0bf21a")
     tool_calls: List[ToolCallRecord] = field(default_factory=list)
     completed_at: Optional[str] = None
     is_complete: bool = False
@@ -60,6 +61,9 @@ class SubagentTracker:
         # Map: parent_tool_use_id -> SubagentSession
         self.sessions: Dict[str, SubagentSession] = {}
 
+        # Map: sdk_agent_id -> parent_tool_use_id (for efficient SDK agent lookup)
+        self.sdk_agent_map: Dict[str, str] = {}
+
         # Map: tool_use_id -> ToolCallRecord (for efficient lookup in post hook)
         self.tool_call_records: Dict[str, ToolCallRecord] = {}
 
@@ -77,6 +81,9 @@ class SubagentTracker:
 
         # Verbose mode for detailed API logging
         self.verbose = verbose
+
+        # Track unmapped agent IDs we've seen (to avoid duplicate logging)
+        self.unmapped_agents_seen: set = set()
 
         # Tool call detail log (JSONL format)
         self.tool_log_file = None
@@ -156,11 +163,19 @@ class SubagentTracker:
         session.completed_at = datetime.now().isoformat()
         session.is_complete = True
 
+        # Calculate duration in MM:SS format
+        start_time = datetime.fromisoformat(session.spawned_at)
+        end_time = datetime.fromisoformat(session.completed_at)
+        duration_seconds = int((end_time - start_time).total_seconds())
+        minutes = duration_seconds // 60
+        seconds = duration_seconds % 60
+        duration_str = f"{minutes:02d}:{seconds:02d}"
+
         print(f"{'='*60}")
         print(f"✅ SUBAGENT COMPLETED: {session.subagent_id}")
         print(f"{'='*60}")
         print(f"Task: {session.description}")
-        print(f"Duration: {session.spawned_at} → {session.completed_at}")
+        print(f"Duration: {duration_str}")
         print(f"API calls: {session.api_call_count}")
         print(f"Tool calls: {len(session.tool_calls)}")
         print(f"{'='*60}")
@@ -181,6 +196,7 @@ class SubagentTracker:
             "timestamp": session.completed_at,
             "subagent_id": session.subagent_id,
             "subagent_type": session.subagent_type,
+            "sdk_agent_id": session.sdk_agent_id,
             "tool_use_id": tool_use_id,
             "description": session.description,
             "spawned_at": session.spawned_at,
@@ -314,6 +330,156 @@ class SubagentTracker:
             self.tool_log_file.write(json.dumps(log_entry) + "\n")
             self.tool_log_file.flush()
 
+    def _detect_unmapped_agent(self, parent_tool_use_id: Optional[str], context_description: str):
+        """Detect and log when we encounter an agent ID that hasn't been mapped yet.
+
+        Args:
+            parent_tool_use_id: The parent tool use ID we're checking
+            context_description: Description of where this was detected (e.g., "text_block", "tool_call")
+        """
+        # Only check if we have a parent_tool_use_id and it's not already mapped
+        if not parent_tool_use_id:
+            return
+
+        if parent_tool_use_id in self.sessions:
+            return  # Agent is mapped, all good
+
+        # Check if we've already logged this unmapped agent
+        if parent_tool_use_id in self.unmapped_agents_seen:
+            return  # Already logged this one
+
+        # New unmapped agent detected!
+        self.unmapped_agents_seen.add(parent_tool_use_id)
+
+        timestamp = datetime.now().isoformat()
+
+        logger.warning(f"⚠️  UNMAPPED AGENT DETECTED: {parent_tool_use_id}")
+        logger.warning(f"   Context: {context_description}")
+        logger.warning(f"   This agent is producing content but wasn't registered via Task spawn")
+
+        # Log to JSONL for analysis
+        self._log_to_jsonl({
+            "event": "unmapped_agent_detected",
+            "timestamp": timestamp,
+            "parent_tool_use_id": parent_tool_use_id,
+            "context": context_description,
+            "known_sessions": list(self.sessions.keys()),
+            "session_count": len(self.sessions)
+        })
+
+    def log_text_block(self, text: str, parent_tool_use_id: Optional[str] = None):
+        """Log a text block from the assistant to the structured log.
+
+        Args:
+            text: The text content from the assistant
+            parent_tool_use_id: Optional parent tool use ID (for subagent context)
+        """
+        from datetime import datetime
+
+        # Detect unmapped agents
+        if parent_tool_use_id:
+            self._detect_unmapped_agent(parent_tool_use_id, "text_block")
+
+        # Determine agent context
+        agent_id = "MAIN_AGENT"
+        agent_type = "lead"
+
+        # Check if this is from a subagent
+        sdk_agent_id = None
+        if parent_tool_use_id and parent_tool_use_id in self.sessions:
+            session = self.sessions[parent_tool_use_id]
+            agent_id = session.subagent_id
+            agent_type = session.subagent_type
+            sdk_agent_id = session.sdk_agent_id
+
+        self._log_to_jsonl({
+            "event": "text_block",
+            "timestamp": datetime.now().isoformat(),
+            "agent_id": agent_id,
+            "agent_type": agent_type,
+            "sdk_agent_id": sdk_agent_id,
+            "text": text,
+            "text_length": len(text),
+            "parent_tool_use_id": parent_tool_use_id
+        })
+
+    def log_tool_result(self, tool_use_id: str, parent_tool_use_id: Optional[str] = None):
+        """Log a tool result block from the message stream.
+
+        Args:
+            tool_use_id: The ID of the tool use that completed
+            parent_tool_use_id: Optional parent tool use ID (for subagent context)
+        """
+        from datetime import datetime
+
+        # Detect unmapped agents
+        if parent_tool_use_id:
+            self._detect_unmapped_agent(parent_tool_use_id, "tool_result")
+
+        # Determine agent context
+        agent_id = "MAIN_AGENT"
+        agent_type = "lead"
+
+        # Check if this is from a subagent
+        sdk_agent_id = None
+        if parent_tool_use_id and parent_tool_use_id in self.sessions:
+            session = self.sessions[parent_tool_use_id]
+            agent_id = session.subagent_id
+            agent_type = session.subagent_type
+            sdk_agent_id = session.sdk_agent_id
+
+        # Get tool name from the record if it exists
+        tool_name = None
+        if tool_use_id in self.tool_call_records:
+            tool_name = self.tool_call_records[tool_use_id].tool_name
+
+        self._log_to_jsonl({
+            "event": "tool_result_received",
+            "timestamp": datetime.now().isoformat(),
+            "tool_use_id": tool_use_id,
+            "agent_id": agent_id,
+            "agent_type": agent_type,
+            "sdk_agent_id": sdk_agent_id,
+            "tool_name": tool_name,
+            "parent_tool_use_id": parent_tool_use_id
+        })
+
+    def log_thinking_block(self, thinking: str, parent_tool_use_id: Optional[str] = None):
+        """Log a thinking block from the assistant to the structured log.
+
+        Args:
+            thinking: The thinking content from the assistant
+            parent_tool_use_id: Optional parent tool use ID (for subagent context)
+        """
+        from datetime import datetime
+
+        # Detect unmapped agents
+        if parent_tool_use_id:
+            self._detect_unmapped_agent(parent_tool_use_id, "thinking_block")
+
+        # Determine agent context
+        agent_id = "MAIN_AGENT"
+        agent_type = "lead"
+
+        # Check if this is from a subagent
+        sdk_agent_id = None
+        if parent_tool_use_id and parent_tool_use_id in self.sessions:
+            session = self.sessions[parent_tool_use_id]
+            agent_id = session.subagent_id
+            agent_type = session.subagent_type
+            sdk_agent_id = session.sdk_agent_id
+
+        self._log_to_jsonl({
+            "event": "thinking_block",
+            "timestamp": datetime.now().isoformat(),
+            "agent_id": agent_id,
+            "agent_type": agent_type,
+            "sdk_agent_id": sdk_agent_id,
+            "thinking": thinking,
+            "thinking_length": len(thinking),
+            "parent_tool_use_id": parent_tool_use_id
+        })
+
     def _write_analysis_event(self, session: SubagentSession):
         """Write analysis completion event marker to transcript for architecture documenter to poll.
 
@@ -381,6 +547,10 @@ class SubagentTracker:
             logger.info(f"  context content: {context}")
             logger.info(f"  _current_parent_id: {self._current_parent_id}")
 
+        # Detect unmapped agents
+        if self._current_parent_id:
+            self._detect_unmapped_agent(self._current_parent_id, f"pre_tool_use:{tool_name}")
+
         # Determine agent context
         is_subagent = self._current_parent_id and self._current_parent_id in self.sessions
 
@@ -388,6 +558,8 @@ class SubagentTracker:
             session = self.sessions[self._current_parent_id]
             agent_id = session.subagent_id
             agent_type = session.subagent_type
+            sdk_agent_id = session.sdk_agent_id
+
             # Create and store record for subagent
             record = ToolCallRecord(
                 timestamp=timestamp,
@@ -408,6 +580,7 @@ class SubagentTracker:
                 "tool_use_id": tool_use_id,
                 "agent_id": agent_id,
                 "agent_type": agent_type,
+                "sdk_agent_id": sdk_agent_id,
                 "tool_name": tool_name,
                 "tool_input": tool_input,
                 "parent_tool_use_id": self._current_parent_id
@@ -459,6 +632,7 @@ class SubagentTracker:
         session = self.sessions.get(record.parent_tool_use_id)
         agent_id = session.subagent_id if session else "MAIN_AGENT"
         agent_type = session.subagent_type if session else "lead"
+        sdk_agent_id = session.sdk_agent_id if session else None
 
         # Verbose completion logging
         if self.verbose:
@@ -474,6 +648,7 @@ class SubagentTracker:
             "tool_use_id": tool_use_id,
             "agent_id": agent_id,
             "agent_type": agent_type,
+            "sdk_agent_id": sdk_agent_id,
             "tool_name": record.tool_name,
             "success": error is None,
             "error": error,
@@ -482,36 +657,66 @@ class SubagentTracker:
 
         return {'continue_': True}
 
-    async def post_tool_result_hook(self, hook_input, sdk_agent_id, _context):
+    async def post_subagent_stop_hook(self, hook_input, sdk_agent_id, _context):
         """Hook callback for SubagentStop events - detects subagent completion.
 
         The SDK provides agent_id (not tool_use_id), so we need to find the matching session.
-        We use agent_type from hook_input and find the first incomplete session of that type.
+        We try sdk_agent_id first (if mapped), then fall back to agent_type matching.
         """
         agent_type = hook_input.get('agent_type', 'unknown')
 
-        # Find the first incomplete session of this type
-        # (Sessions complete in order, so first incomplete is the one that just finished)
-        matching_tool_use_id = None
-        for tool_use_id, session in self.sessions.items():
-            if session.subagent_type == agent_type and not session.is_complete:
-                matching_tool_use_id = tool_use_id
-                break
+        # Try to find by SDK agent ID first (most reliable)
+        matching_tool_use_id = self.sdk_agent_map.get(sdk_agent_id)
+
+        # Fall back to agent_type matching if sdk_agent_id not mapped
+        if not matching_tool_use_id:
+            for tool_use_id, session in self.sessions.items():
+                if session.subagent_type == agent_type and not session.is_complete:
+                    matching_tool_use_id = tool_use_id
+                    # Store the mapping for future use
+                    if sdk_agent_id:
+                        session.sdk_agent_id = sdk_agent_id
+                        self.sdk_agent_map[sdk_agent_id] = tool_use_id
+                        logger.info(f"📍 Mapped SDK agent_id {sdk_agent_id} to {session.subagent_id}")
+                    break
 
         if matching_tool_use_id:
             session = self.sessions[matching_tool_use_id]
-            print(f"🎯 SubagentStop: {session.subagent_id} (type={agent_type})")
+            print(f"🎯 SubagentStop: {session.subagent_id} (type={agent_type}, sdk_id={sdk_agent_id})")
 
             # Mark complete (this decrements counters and writes events)
             self.mark_subagent_complete(matching_tool_use_id)
         else:
-            if self.verbose:
-                logger.warning(f"⚠️  SubagentStop for {agent_type} but no incomplete session found")
-                logger.warning(f"   SDK agent_id: {sdk_agent_id}")
+            logger.warning(f"⚠️  SubagentStop for {agent_type} but no incomplete session found")
+            logger.warning(f"   SDK agent_id: {sdk_agent_id}")
+
+            # Log unmapped SDK agent
+            self._log_to_jsonl({
+                "event": "sdk_agent_unmapped",
+                "timestamp": datetime.now().isoformat(),
+                "sdk_agent_id": sdk_agent_id,
+                "agent_type": agent_type,
+                "known_sessions": list(self.sessions.keys()),
+                "known_sdk_agents": list(self.sdk_agent_map.keys())
+            })
 
         return {'continue_': True}
 
     def close(self):
         """Close the tool log file."""
+        # Log summary of unmapped agents if any were detected
+        if self.unmapped_agents_seen:
+            logger.warning(f"\n⚠️  SESSION SUMMARY: {len(self.unmapped_agents_seen)} unmapped agent(s) detected")
+            logger.warning(f"   Unmapped agent IDs: {list(self.unmapped_agents_seen)}")
+
+            # Write summary to JSONL
+            self._log_to_jsonl({
+                "event": "session_summary_unmapped_agents",
+                "timestamp": datetime.now().isoformat(),
+                "unmapped_agent_count": len(self.unmapped_agents_seen),
+                "unmapped_agent_ids": list(self.unmapped_agents_seen),
+                "total_sessions": len(self.sessions)
+            })
+
         if self.tool_log_file:
             self.tool_log_file.close()

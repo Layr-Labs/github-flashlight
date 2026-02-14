@@ -34,6 +34,9 @@ def process_assistant_message(msg: Any, tracker: Any, transcript: Any) -> None:
             transcript.write(text, end="")
             print(f"[📝 Text] {text}", flush=True)
 
+            # Log text block to structured log
+            tracker.log_text_block(text, parent_id)
+
         elif block_type == 'ThinkingBlock':
             # Print thinking block information
             thinking_text = getattr(block, 'thinking', getattr(block, 'text', ''))
@@ -45,6 +48,9 @@ def process_assistant_message(msg: Any, tracker: Any, transcript: Any) -> None:
                     print(f"Preview: {thinking_text[:preview_length]}...")
                 else:
                     print(f"Content: {thinking_text}")
+
+                # Log thinking block to structured log
+                tracker.log_thinking_block(thinking_text, parent_id)
 
         elif block_type == 'ToolUseBlock':
             # Mark that a tool was used
@@ -71,8 +77,12 @@ def process_assistant_message(msg: Any, tracker: Any, transcript: Any) -> None:
             # Mark that a tool was used
             _tool_just_used = True
 
-            # Check if this is a Task tool result (subagent completion)
+            # Log tool result to structured log
             tool_use_id = getattr(block, 'tool_use_id', None)
+            if tool_use_id:
+                tracker.log_tool_result(tool_use_id, parent_id)
+
+            # Check if this is a Task tool result (subagent completion)
             if tool_use_id and tool_use_id in tracker.sessions:
                 session = tracker.sessions[tool_use_id]
                 subagent_id = session.subagent_id
