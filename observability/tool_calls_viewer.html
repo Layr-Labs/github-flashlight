@@ -349,6 +349,7 @@
         </div>
 
         <div id="lifespan" class="tab-content">
+            <div class="filter-controls" id="lifespanFilters"></div>
             <div class="visualization">
                 <svg id="lifespanChart"></svg>
             </div>
@@ -650,11 +651,16 @@
 
         // Global text block data
         let textBlockData = [];
+        let thinkingBlockData = [];
 
         // Process data
         function processData() {
             const toolCallStarts = {};
             const toolCallCompletes = {};
+
+            // Clear previous data
+            textBlockData = [];
+            thinkingBlockData = [];
 
             allEvents.forEach(event => {
                 if (event.event === 'tool_call_start') {
@@ -668,6 +674,15 @@
                         agentType: event.agent_type,
                         text: event.text,
                         textLength: event.text_length,
+                        parentToolUseId: event.parent_tool_use_id
+                    });
+                } else if (event.event === 'thinking_block') {
+                    thinkingBlockData.push({
+                        timestamp: new Date(event.timestamp),
+                        agentId: event.agent_id,
+                        agentType: event.agent_type,
+                        thinking: event.thinking,
+                        thinkingLength: event.thinking_length,
                         parentToolUseId: event.parent_tool_use_id
                     });
                 }
@@ -748,6 +763,7 @@
                 { label: 'Avg Duration', value: formatTime(avgDuration), class: avgDuration > 5 ? 'warning' : 'success' },
                 { label: 'Failed Calls', value: failedCalls, class: failedCalls > 0 ? 'warning' : 'success' },
                 { label: 'Active Agents', value: agents.size, class: 'success' },
+                { label: 'Thinking Blocks', value: thinkingBlockData.length, class: 'success' },
                 { label: 'Avg Context Weight', value: avgWeight.toFixed(2), class: avgWeight > 7 ? 'warning' : 'success' }
             ];
 
@@ -785,17 +801,38 @@
 
             // Create filters - preserve current values
             const filters = document.getElementById('timelineFilters');
-            const currentToolFilter = document.getElementById('toolFilter')?.value || 'all';
             const currentWeightFilter = document.getElementById('weightFilter')?.value || '0';
 
+            // Get currently selected tools (preserve state)
+            const currentSelectedTools = new Set();
+            const existingCheckboxes = document.querySelectorAll('.tool-type-checkbox');
+            const isFirstRender = existingCheckboxes.length === 0;
+
+            document.querySelectorAll('.tool-type-checkbox:checked').forEach(cb => {
+                currentSelectedTools.add(cb.value);
+            });
+
             const uniqueTools = Array.from(new Set(toolCallData.map(d => d.toolName))).sort();
+
+            // Only default to all selected on first render, not when user has deselected all
+            const defaultSelected = isFirstRender && currentSelectedTools.size === 0;
+
             filters.innerHTML = `
-                <div class="filter-group">
-                    <label>Tool:</label>
-                    <select id="toolFilter">
-                        <option value="all">All Tools</option>
-                        ${uniqueTools.map(t => `<option value="${t}">${t}</option>`).join('')}
-                    </select>
+                <div class="filter-group" style="flex-direction: column; align-items: flex-start;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 8px; align-items: center;">
+                        <label style="font-weight: 600;">Tool Types:</label>
+                        <button id="selectAllTools" style="padding: 4px 8px; font-size: 12px; cursor: pointer; border: 1px solid #ddd; background: white; border-radius: 3px;">Select All</button>
+                        <button id="deselectAllTools" style="padding: 4px 8px; font-size: 12px; cursor: pointer; border: 1px solid #ddd; background: white; border-radius: 3px;">Deselect All</button>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px; max-width: 800px;">
+                        ${uniqueTools.map(tool => `
+                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 4px 8px; background: #f5f5f5; border-radius: 4px; font-size: 13px;">
+                                <input type="checkbox" class="tool-type-checkbox" value="${tool}"
+                                    ${defaultSelected || currentSelectedTools.has(tool) ? 'checked' : ''}>
+                                <span>${tool}</span>
+                            </label>
+                        `).join('')}
+                    </div>
                 </div>
                 <div class="filter-group">
                     <label>Min Weight:</label>
@@ -808,19 +845,35 @@
             `;
 
             // Restore filter values
-            document.getElementById('toolFilter').value = currentToolFilter;
             document.getElementById('weightFilter').value = currentWeightFilter;
 
             // Attach event listeners
-            document.getElementById('toolFilter').addEventListener('change', renderTimeline);
+            document.querySelectorAll('.tool-type-checkbox').forEach(cb => {
+                cb.addEventListener('change', renderTimeline);
+            });
             document.getElementById('weightFilter').addEventListener('change', renderTimeline);
 
-            const toolFilter = currentToolFilter;
+            // Select/Deselect all buttons
+            document.getElementById('selectAllTools').addEventListener('click', () => {
+                document.querySelectorAll('.tool-type-checkbox').forEach(cb => cb.checked = true);
+                renderTimeline();
+            });
+            document.getElementById('deselectAllTools').addEventListener('click', () => {
+                document.querySelectorAll('.tool-type-checkbox').forEach(cb => cb.checked = false);
+                renderTimeline();
+            });
+
+            // Get selected tools
+            const selectedTools = new Set();
+            document.querySelectorAll('.tool-type-checkbox:checked').forEach(cb => {
+                selectedTools.add(cb.value);
+            });
             const weightFilter = parseFloat(currentWeightFilter);
 
-            // Also include agents that only have text blocks
+            // Also include agents that only have text blocks or thinking blocks
             const agentsWithTextBlocks = new Set(textBlockData.map(tb => tb.agentId));
-            const allAgentsSet = new Set([...agents, ...agentsWithTextBlocks]);
+            const agentsWithThinkingBlocks = new Set(thinkingBlockData.map(tb => tb.agentId));
+            const allAgentsSet = new Set([...agents, ...agentsWithTextBlocks, ...agentsWithThinkingBlocks]);
             const allAgents = Array.from(allAgentsSet).sort((a, b) => {
                 if (a === 'MAIN_AGENT') return -1;
                 if (b === 'MAIN_AGENT') return 1;
@@ -831,26 +884,28 @@
                 let agentData = byAgent.get(agentId) ? Array.from(byAgent.get(agentId)) : [];
 
                 // Apply filters
-                if (toolFilter !== 'all') {
-                    agentData = agentData.filter(d => d.toolName === toolFilter);
-                }
+                // Filter by selected tools (if none selected, show nothing)
+                agentData = agentData.filter(d => selectedTools.has(d.toolName));
+
                 if (weightFilter > 0) {
                     agentData = agentData.filter(d => d.weight >= weightFilter);
                 }
 
-                // Check if this agent has text blocks
+                // Check if this agent has text blocks or thinking blocks
                 const agentTextBlocks = textBlockData.filter(tb => tb.agentId === agentId);
+                const agentThinkingBlocks = thinkingBlockData.filter(tb => tb.agentId === agentId);
 
-                // Skip if no tool calls and no text blocks
-                if (agentData.length === 0 && agentTextBlocks.length === 0) return;
+                // Skip if no tool calls, text blocks, or thinking blocks
+                if (agentData.length === 0 && agentTextBlocks.length === 0 && agentThinkingBlocks.length === 0) return;
 
                 const agentDiv = document.createElement('div');
                 agentDiv.className = 'agent-timeline';
 
-                // Calculate time range from both tool calls and text blocks
+                // Calculate time range from tool calls, text blocks, and thinking blocks
                 const toolTimes = agentData.map(d => d.timestamp);
                 const textTimes = agentTextBlocks.map(tb => tb.timestamp);
-                const allTimes = [...toolTimes, ...textTimes];
+                const thinkingTimes = agentThinkingBlocks.map(tb => tb.timestamp);
+                const allTimes = [...toolTimes, ...textTimes, ...thinkingTimes];
 
                 const minTime = d3.min(allTimes);
                 const maxTime = d3.max(allTimes);
@@ -865,6 +920,7 @@
                         ${agentId}
                         ${agentData.length > 0 ? `<span class="agent-badge">${agentData.length} calls</span>` : ''}
                         ${agentTextBlocks.length > 0 ? `<span class="agent-badge" style="background: #e91e63">${agentTextBlocks.length} text blocks</span>` : ''}
+                        ${agentThinkingBlocks.length > 0 ? `<span class="agent-badge" style="background: #9C27B0">${agentThinkingBlocks.length} thinking blocks</span>` : ''}
                         ${weights.length > 0 ? `<span class="agent-badge" style="background: ${avgWeight > 8 ? '#FF4500' : avgWeight > 6 ? '#FFA500' : '#667eea'}">
                             Avg: ${avgWeight.toFixed(1)}
                         </span>` : ''}
@@ -932,6 +988,46 @@
                                 <div class="tooltip-label">Preview:</div>
                                 <div style="font-size: 11px; margin-top: 4px; max-width: 300px; word-break: break-word;">
                                     ${d.text.substring(0, 150)}${d.text.length > 150 ? '...' : ''}
+                                </div>
+                            </div>
+                        `;
+                        tooltip.style.left = event.pageX + 10 + 'px';
+                        tooltip.style.top = event.pageY + 10 + 'px';
+                    })
+                    .on('mouseout', () => {
+                        document.getElementById('tooltip').style.display = 'none';
+                    });
+
+                // Draw thinking blocks as vertical markers with distinct styling
+                svg.selectAll('.thinking-block')
+                    .data(agentThinkingBlocks)
+                    .join('line')
+                    .attr('class', 'thinking-block-marker')
+                    .attr('x1', d => xScale(d.timestamp))
+                    .attr('x2', d => xScale(d.timestamp))
+                    .attr('y1', 5)
+                    .attr('y2', 55)
+                    .attr('stroke', '#9C27B0')
+                    .attr('stroke-width', 2)
+                    .attr('stroke-dasharray', '4,2')
+                    .attr('opacity', 0.7)
+                    .on('mouseover', function(event, d) {
+                        const tooltip = document.getElementById('tooltip');
+                        tooltip.style.display = 'block';
+                        tooltip.innerHTML = `
+                            <div class="tooltip-title">💭 Thinking Block</div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Time:</span>
+                                <span>+${formatTime((d.timestamp - minTime) / 1000)}</span>
+                            </div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Length:</span>
+                                <span>${d.thinkingLength} chars</span>
+                            </div>
+                            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">
+                                <div class="tooltip-label">Preview:</div>
+                                <div style="font-size: 11px; margin-top: 4px; max-width: 300px; word-break: break-word;">
+                                    ${d.thinking.substring(0, 150)}${d.thinking.length > 150 ? '...' : ''}
                                 </div>
                             </div>
                         `;
@@ -1112,6 +1208,20 @@
                 legendDiv.appendChild(textBlockItem);
             }
 
+            if (thinkingBlockData.length > 0) {
+                const thinkingBlockItem = document.createElement('div');
+                thinkingBlockItem.className = 'legend-item';
+                thinkingBlockItem.style.display = 'flex';
+                thinkingBlockItem.style.alignItems = 'center';
+                thinkingBlockItem.innerHTML = `
+                    <svg width="20" height="20" style="margin-right: 8px;">
+                        <line x1="10" x2="10" y1="3" y2="17" stroke="#9C27B0" stroke-width="2" stroke-dasharray="4,2" opacity="0.7"/>
+                    </svg>
+                    <span>Thinking Block</span>
+                `;
+                legendDiv.appendChild(thinkingBlockItem);
+            }
+
             legendDiv.innerHTML += '<div style="width: 100%; margin: 10px 0;"></div><strong>Context Weight:</strong>';
 
             [
@@ -1145,6 +1255,63 @@
             const svg = d3.select('#lifespanChart');
             svg.selectAll('*').remove();
 
+            // Create filters
+            const filters = document.getElementById('lifespanFilters');
+
+            // Get currently selected tools (preserve state)
+            const currentSelectedTools = new Set();
+            const existingCheckboxes = document.querySelectorAll('.lifespan-tool-checkbox');
+            const isFirstRender = existingCheckboxes.length === 0;
+
+            document.querySelectorAll('.lifespan-tool-checkbox:checked').forEach(cb => {
+                currentSelectedTools.add(cb.value);
+            });
+
+            const uniqueTools = Array.from(new Set(toolCallData.map(d => d.toolName))).sort();
+
+            // Only default to all selected on first render, not when user has deselected all
+            const defaultSelected = isFirstRender && currentSelectedTools.size === 0;
+
+            filters.innerHTML = `
+                <div class="filter-group" style="flex-direction: column; align-items: flex-start;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 8px; align-items: center;">
+                        <label style="font-weight: 600;">Tool Types:</label>
+                        <button id="lifespanSelectAllTools" style="padding: 4px 8px; font-size: 12px; cursor: pointer; border: 1px solid #ddd; background: white; border-radius: 3px;">Select All</button>
+                        <button id="lifespanDeselectAllTools" style="padding: 4px 8px; font-size: 12px; cursor: pointer; border: 1px solid #ddd; background: white; border-radius: 3px;">Deselect All</button>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px; max-width: 800px;">
+                        ${uniqueTools.map(tool => `
+                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 4px 8px; background: #f5f5f5; border-radius: 4px; font-size: 13px;">
+                                <input type="checkbox" class="lifespan-tool-checkbox" value="${tool}"
+                                    ${defaultSelected || currentSelectedTools.has(tool) ? 'checked' : ''}>
+                                <span>${tool}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            // Attach event listeners
+            document.querySelectorAll('.lifespan-tool-checkbox').forEach(cb => {
+                cb.addEventListener('change', renderLifespan);
+            });
+
+            // Select/Deselect all buttons
+            document.getElementById('lifespanSelectAllTools').addEventListener('click', () => {
+                document.querySelectorAll('.lifespan-tool-checkbox').forEach(cb => cb.checked = true);
+                renderLifespan();
+            });
+            document.getElementById('lifespanDeselectAllTools').addEventListener('click', () => {
+                document.querySelectorAll('.lifespan-tool-checkbox').forEach(cb => cb.checked = false);
+                renderLifespan();
+            });
+
+            // Get selected tools
+            const selectedTools = new Set();
+            document.querySelectorAll('.lifespan-tool-checkbox:checked').forEach(cb => {
+                selectedTools.add(cb.value);
+            });
+
             const agents = Object.keys(agentLifespans).sort((a, b) => {
                 if (a === 'MAIN_AGENT') return -1;
                 if (b === 'MAIN_AGENT') return 1;
@@ -1175,16 +1342,27 @@
                 .padding(0.3);
 
             // X axis
-            g.append('g')
+            const xAxisGroup = g.append('g')
                 .attr('transform', `translate(0, ${height - margin.top - margin.bottom})`)
                 .call(d3.axisBottom(xScale)
                     .ticks(10)
                     .tickFormat(d => {
                         const seconds = (d - minTime) / 1000;
-                        return `+${formatTime(seconds)}`;
-                    }))
-                .selectAll('text')
+                        return formatTime(seconds);
+                    }));
+
+            xAxisGroup.selectAll('text')
                 .style('font-size', '12px');
+
+            // Add axis label
+            xAxisGroup.append('text')
+                .attr('x', (width - margin.left - margin.right) / 2)
+                .attr('y', 40)
+                .attr('fill', '#666')
+                .attr('text-anchor', 'middle')
+                .attr('font-size', '13px')
+                .attr('font-weight', 'bold')
+                .text('Elapsed Time (HH:MM:SS)');
 
             // Y axis
             g.append('g')
@@ -1237,8 +1415,10 @@
                     .attr('fill', '#333')
                     .text(formatTime(duration));
 
-                // Add tool usage markers for this agent
-                const agentTools = toolCallData.filter(tc => tc.agentId === agent);
+                // Add tool usage markers for this agent (with filter)
+                const agentTools = toolCallData.filter(tc =>
+                    tc.agentId === agent && selectedTools.has(tc.toolName)
+                );
                 g.selectAll(`.tool-marker-${agent.replace(/[^a-zA-Z0-9]/g, '_')}`)
                     .data(agentTools)
                     .join('circle')
@@ -1262,8 +1442,8 @@
                                 <span>${agent}</span>
                             </div>
                             <div class="tooltip-row">
-                                <span class="tooltip-label">Time:</span>
-                                <span>+${formatTime((d.timestamp - minTime) / 1000)}</span>
+                                <span class="tooltip-label">Elapsed:</span>
+                                <span>${formatTime((d.timestamp - minTime) / 1000)}</span>
                             </div>
                             <div class="tooltip-row">
                                 <span class="tooltip-label">Weight:</span>
@@ -1305,8 +1485,8 @@
                                 <span>${agent}</span>
                             </div>
                             <div class="tooltip-row">
-                                <span class="tooltip-label">Time:</span>
-                                <span>+${formatTime((d.timestamp - minTime) / 1000)}</span>
+                                <span class="tooltip-label">Elapsed:</span>
+                                <span>${formatTime((d.timestamp - minTime) / 1000)}</span>
                             </div>
                             <div class="tooltip-row">
                                 <span class="tooltip-label">Length:</span>
@@ -1316,6 +1496,54 @@
                                 <div class="tooltip-label">Preview:</div>
                                 <div style="font-size: 11px; margin-top: 4px; max-width: 300px; word-break: break-word;">
                                     ${d.text.substring(0, 100)}${d.text.length > 100 ? '...' : ''}
+                                </div>
+                            </div>
+                        `;
+                        tooltip.style.left = event.pageX + 10 + 'px';
+                        tooltip.style.top = event.pageY + 10 + 'px';
+                    })
+                    .on('mouseout', function() {
+                        d3.select(this).attr('opacity', 0.6).attr('stroke-width', 2);
+                        document.getElementById('tooltip').style.display = 'none';
+                    });
+
+                // Add thinking block markers for this agent
+                const agentThinkingBlocks = thinkingBlockData.filter(tb => tb.agentId === agent);
+                g.selectAll(`.thinking-marker-${agent.replace(/[^a-zA-Z0-9]/g, '_')}`)
+                    .data(agentThinkingBlocks)
+                    .join('line')
+                    .attr('class', `thinking-marker-${agent.replace(/[^a-zA-Z0-9]/g, '_')}`)
+                    .attr('x1', d => xScale(d.timestamp))
+                    .attr('x2', d => xScale(d.timestamp))
+                    .attr('y1', yScale(agent))
+                    .attr('y2', yScale(agent) + yScale.bandwidth())
+                    .attr('stroke', '#9C27B0')
+                    .attr('stroke-width', 2)
+                    .attr('stroke-dasharray', '4,2')
+                    .attr('opacity', 0.6)
+                    .style('cursor', 'pointer')
+                    .on('mouseover', function(event, d) {
+                        d3.select(this).attr('opacity', 1).attr('stroke-width', 3);
+                        const tooltip = document.getElementById('tooltip');
+                        tooltip.style.display = 'block';
+                        tooltip.innerHTML = `
+                            <div class="tooltip-title">💭 Thinking Block</div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Agent:</span>
+                                <span>${agent}</span>
+                            </div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Elapsed:</span>
+                                <span>${formatTime((d.timestamp - minTime) / 1000)}</span>
+                            </div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Length:</span>
+                                <span>${d.thinkingLength} chars</span>
+                            </div>
+                            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">
+                                <div class="tooltip-label">Preview:</div>
+                                <div style="font-size: 11px; margin-top: 4px; max-width: 300px; word-break: break-word;">
+                                    ${d.thinking.substring(0, 100)}${d.thinking.length > 100 ? '...' : ''}
                                 </div>
                             </div>
                         `;
@@ -1348,7 +1576,7 @@
                 .attr('x', -10)
                 .attr('y', -10)
                 .attr('width', 180)
-                .attr('height', 110)
+                .attr('height', 125)
                 .attr('fill', 'white')
                 .attr('stroke', '#ddd')
                 .attr('stroke-width', 1)
@@ -1391,23 +1619,39 @@
                 .attr('font-size', '11px')
                 .text('Text Block');
 
+            // Thinking block marker
+            legendG.append('line')
+                .attr('x1', 5)
+                .attr('x2', 5)
+                .attr('y1', 56)
+                .attr('y2', 68)
+                .attr('stroke', '#9C27B0')
+                .attr('stroke-width', 2)
+                .attr('stroke-dasharray', '4,2')
+                .attr('opacity', 0.6);
+            legendG.append('text')
+                .attr('x', 15)
+                .attr('y', 65)
+                .attr('font-size', '11px')
+                .text('Thinking Block');
+
             // Start marker
             legendG.append('polygon')
                 .attr('points', '0,-4 8,0 0,4')
-                .attr('transform', `translate(5, 65)`)
+                .attr('transform', `translate(5, 80)`)
                 .attr('fill', 'green')
                 .attr('stroke', 'darkgreen')
                 .attr('stroke-width', 1);
             legendG.append('text')
                 .attr('x', 15)
-                .attr('y', 68)
+                .attr('y', 83)
                 .attr('font-size', '11px')
                 .text('Agent Start');
 
             // End marker
             legendG.append('rect')
                 .attr('x', 1)
-                .attr('y', 76)
+                .attr('y', 91)
                 .attr('width', 8)
                 .attr('height', 8)
                 .attr('fill', 'red')
@@ -1415,7 +1659,7 @@
                 .attr('stroke-width', 1);
             legendG.append('text')
                 .attr('x', 15)
-                .attr('y', 85)
+                .attr('y', 100)
                 .attr('font-size', '11px')
                 .text('Agent End');
         }
