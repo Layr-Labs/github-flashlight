@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tool Calls Visualization - Interactive</title>
+    <title>Claude Multi-Agent Session Profiler</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         * {
@@ -320,13 +320,28 @@
         <div class="header">
             <div>
                 <h1>🔍 Tool Calls Visualization</h1>
-                <p style="color: #666; margin-top: 5px;">Interactive analysis of agent tool calls and context weights</p>
+                <p style="color: #666; margin-top: 5px;">Interactive analysis of agent tool usage and resource weights</p>
             </div>
-            <div class="file-input">
-                <label for="fileInput" style="font-weight: 500;">Tool Calls:</label>
-                <input type="file" id="fileInput" accept=".jsonl">
-                <label for="tokenFileInput" style="font-weight: 500; margin-left: 15px;">Session Log:</label>
-                <input type="file" id="tokenFileInput" accept=".jsonl">
+            <div class="file-input" style="flex-direction: column; align-items: flex-end; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label for="fileInput" style="font-weight: 500;">Tool Calls:</label>
+                    <input type="file" id="fileInput" accept=".jsonl">
+                    <label for="tokenFileInput" style="font-weight: 500; margin-left: 15px;">Session Log:</label>
+                    <input type="file" id="tokenFileInput" accept=".jsonl">
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+                    <label for="urlInput" style="font-weight: 500;">URL:</label>
+                    <input type="text" id="urlInput" placeholder="http://localhost:8000/logs/latest/tool_calls.jsonl" style="width: 450px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; margin-left: 10px;">
+                        <input type="checkbox" id="liveMonitor">
+                        <span style="font-weight: 500;">Live Monitor</span>
+                    </label>
+                    <span id="liveStatus" style="margin-left: 10px; color: #666; font-size: 13px;"></span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+                    <label for="sessionUrlInput" style="font-weight: 500;">Session URL:</label>
+                    <input type="text" id="sessionUrlInput" placeholder="http://localhost:8000/logs/latest/session.jsonl" style="width: 450px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;" readonly>
+                </div>
             </div>
         </div>
 
@@ -335,7 +350,7 @@
         <div class="tabs">
             <button class="tab active" data-tab="timeline">Timeline View</button>
             <button class="tab" data-tab="lifespan">Lifespan View</button>
-            <button class="tab" data-tab="analysis">Context Analysis</button>
+            <button class="tab" data-tab="analysis">Tool Usage Analysis</button>
             <button class="tab" data-tab="clustering">Resource Clustering</button>
             <button class="tab" data-tab="text">Text Analysis</button>
             <button class="tab" data-tab="tokens">Token Tracking</button>
@@ -385,6 +400,41 @@
                                 <option value="2" selected>2+ connections</option>
                                 <option value="3">3+ connections</option>
                             </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Toggle By Agent: <small style="color: #666;">(Ctrl/Cmd+Click for multiple)</small></label>
+                            <select id="filterAgent" multiple size="6" style="min-width: 180px;">
+                                <option value="" selected>All Agents</option>
+                            </select>
+                            <div style="display: flex; gap: 5px; margin-top: 5px;">
+                                <button class="select-all-btn" data-target="filterAgent" style="flex: 1; padding: 4px 8px; font-size: 12px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 3px;">All</button>
+                                <button class="select-none-btn" data-target="filterAgent" style="flex: 1; padding: 4px 8px; font-size: 12px; cursor: pointer; background: #757575; color: white; border: none; border-radius: 3px;">None</button>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label>Filter by Directory: <small style="color: #666;">(Ctrl/Cmd+Click for multiple)</small></label>
+                            <select id="filterDirectory" multiple size="6" style="min-width: 250px;">
+                                <option value="" selected>All Directories</option>
+                            </select>
+                            <div style="display: flex; gap: 5px; margin-top: 5px;">
+                                <button class="select-all-btn" data-target="filterDirectory" style="flex: 1; padding: 4px 8px; font-size: 12px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 3px;">All</button>
+                                <button class="select-none-btn" data-target="filterDirectory" style="flex: 1; padding: 4px 8px; font-size: 12px; cursor: pointer; background: #757575; color: white; border: none; border-radius: 3px;">None</button>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label>Filter by File: <small style="color: #666;">(Ctrl/Cmd+Click for multiple)</small></label>
+                            <select id="filterFile" multiple size="6" style="min-width: 250px;">
+                                <option value="" selected>All Files</option>
+                            </select>
+                            <div style="display: flex; gap: 5px; margin-top: 5px;">
+                                <button class="select-all-btn" data-target="filterFile" style="flex: 1; padding: 4px 8px; font-size: 12px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 3px;">All</button>
+                                <button class="select-none-btn" data-target="filterFile" style="flex: 1; padding: 4px 8px; font-size: 12px; cursor: pointer; background: #757575; color: white; border: none; border-radius: 3px;">None</button>
+                            </div>
+                        </div>
+                        <div class="filter-group" style="align-self: flex-end;">
+                            <button id="clearClusterFilters" style="padding: 8px 16px; cursor: pointer; background: #f44336; color: white; border: none; border-radius: 4px; font-size: 14px;">
+                                Clear Filters
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -467,8 +517,57 @@
         function attachClusteringListeners() {
             const clusterBy = document.getElementById('clusterBy');
             const minLinks = document.getElementById('minLinks');
+            const filterAgent = document.getElementById('filterAgent');
+            const filterDirectory = document.getElementById('filterDirectory');
+            const filterFile = document.getElementById('filterFile');
+            const clearButton = document.getElementById('clearClusterFilters');
+
             if (clusterBy) clusterBy.addEventListener('change', renderClustering);
             if (minLinks) minLinks.addEventListener('change', renderClustering);
+            if (filterAgent) filterAgent.addEventListener('change', renderClustering);
+            if (filterDirectory) filterDirectory.addEventListener('change', renderClustering);
+            if (filterFile) filterFile.addEventListener('change', renderClustering);
+
+            if (clearButton) {
+                clearButton.addEventListener('click', () => {
+                    // Clear all filter selections
+                    if (filterAgent) {
+                        Array.from(filterAgent.options).forEach(opt => opt.selected = opt.value === '');
+                    }
+                    if (filterDirectory) {
+                        Array.from(filterDirectory.options).forEach(opt => opt.selected = opt.value === '');
+                    }
+                    if (filterFile) {
+                        Array.from(filterFile.options).forEach(opt => opt.selected = opt.value === '');
+                    }
+                    renderClustering();
+                });
+            }
+
+            // Select All / None buttons
+            document.querySelectorAll('.select-all-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetId = btn.getAttribute('data-target');
+                    const select = document.getElementById(targetId);
+                    if (select) {
+                        Array.from(select.options).forEach(opt => {
+                            if (opt.value !== '') opt.selected = true;
+                        });
+                        renderClustering();
+                    }
+                });
+            });
+
+            document.querySelectorAll('.select-none-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetId = btn.getAttribute('data-target');
+                    const select = document.getElementById(targetId);
+                    if (select) {
+                        Array.from(select.options).forEach(opt => opt.selected = opt.value === '');
+                        renderClustering();
+                    }
+                });
+            });
         }
 
         // File input handler
@@ -486,6 +585,272 @@
                 loadAndProcessTokenFile(file);
             }
         });
+
+        // Live monitoring state
+        let liveMonitorInterval = null;
+        let toolUsageEndpoint = null;
+        let currentUrl = null;
+        let lastEventCount = 0;
+
+        // Live monitor checkbox handler
+        document.getElementById('liveMonitor').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                if (!toolUsageEndpoint) {
+                    const url = document.getElementById('urlInput').value.trim();
+                    if (!url) {
+                        alert('Please enter a URL first');
+                        e.target.checked = false;
+                        return;
+                    }
+                    toolUsageEndpoint = url;
+                }
+                startLiveToolCallMonitoring();
+            } else {
+                stopLiveMonitoring();
+            }
+        });
+
+        // Initialize page: fetch session ID from server if available
+        async function initializeSession() {
+            try {
+                console.log('Initializing session...');
+                const response = await fetch('http://localhost:8000/get/session_id');
+                console.log('Server response status:', response.status);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Server data:', data);
+
+                    if (data.session_file) {
+                        // Construct tool calls URL
+                        const sessionUrl = `http://localhost:8000/${data.session_file}`;
+                        console.log("session url", sessionUrl);
+
+                        // Set the tool calls URL input field (CORRECT FIELD)
+                        document.getElementById('urlInput').value = sessionUrl;
+
+                        // Derive session log URL: SESSION_ID.jsonl → SESSION_ID/session.jsonl
+                        const sessionLogUrl = sessionUrl;
+                        document.getElementById('sessionUrlInput').value = sessionLogUrl;
+
+                        // Load tool calls data
+
+                        // Attempt to load session log (optional - may not exist yet)
+                        try {
+                            await loadSessionFromUrl(sessionLogUrl);
+                        } catch (e) {
+                            console.log('Session log not available:', e.message);
+                        }
+                    }
+                }
+            } catch (error) {
+                // Silently fail - server might not be running or no session available
+                console.log('No session auto-load available:', error.message);
+            }
+        }
+
+        // Initialize tool calls: fetch tool calls file from server if available
+        async function initializeToolCalls() {
+            try {
+                console.log('Initializing tool calls...');
+                const response = await fetch('http://localhost:8000/get/tool_calls_file');
+                console.log('Tool calls server response status:', response.status);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Tool calls server data:', data);
+
+                    if (data.tool_calls_file) {
+                        // Construct tool calls URL
+                        const toolCallsUrl = `http://localhost:8000/${data.tool_calls_file}`;
+                        console.log("Tool calls url", toolCallsUrl);
+
+                        // Set the URL in the input field
+                        document.getElementById('urlInput').value = toolCallsUrl;
+
+                        // Set up live monitoring
+                        currentUrl = toolCallsUrl;
+                        toolUsageEndpoint = toolCallsUrl;
+
+                        // Load tool calls data
+                        await loadToolCallsFromURL(toolCallsUrl);
+
+                        // Enable live monitoring
+                        document.getElementById('liveMonitor').checked = true;
+                        startLiveToolCallMonitoring();
+                    }
+                }
+            } catch (error) {
+                // Silently fail - server might not be running or no tool calls file available
+                console.log('No tool calls auto-load available:', error.message);
+            }
+        }
+
+        // Call initialization when page loads
+        initializeSession();
+        initializeToolCalls();
+
+        // Load data from URL
+        async function loadToolCallsFromURL(url) {
+            try {
+                console.log('Loading from URL:', url);
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('loading').innerHTML = 'Loading from URL...';
+
+                // Add timeout to prevent hanging
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                console.log('Response status:', response.status, response.statusText);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const text = await response.text();
+                console.log('Received text, length:', text.length);
+
+                const lines = text.split('\n');
+                console.log('Split into lines:', lines.length);
+
+                allEvents = [];
+                let parseErrors = 0;
+                lines.forEach((line, index) => {
+                    if (line.trim()) {
+                        try {
+                            allEvents.push(JSON.parse(line));
+                        } catch (e) {
+                            parseErrors++;
+                            console.warn(`Failed to parse line ${index + 1}:`, e.message, line.substring(0, 100));
+                        }
+                    }
+                });
+
+                console.log('Parsed events:', allEvents.length, 'Parse errors:', parseErrors);
+
+                if (allEvents.length === 0) {
+                    throw new Error('No valid events found in file. Check console for parse errors.');
+                }
+
+                lastEventCount = allEvents.length;
+                console.log('Processing data...');
+                processData();
+
+                console.log('Tool call data:', toolCallData.length);
+
+                if (toolCallData.length === 0) {
+                    // No tool calls yet, but this is okay - show waiting message
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('loading').innerHTML =
+                        `<div style="color: #666; padding: 20px; text-align: center;">
+                            <strong>⏳ Waiting for tool calls...</strong><br><br>
+                            <small>Session loaded with ${allEvents.length} events (text/thinking blocks only).</small><br>
+                            <small>Tool call data will appear here once the agent starts using tools.</small><br>
+                            <small>Live monitoring is active and will auto-update.</small>
+                        </div>`;
+                    updateLiveStatus(`⏳ Waiting for tool calls (${allEvents.length} events loaded)`);
+                    console.log('No tool calls yet - waiting for data...');
+                } else {
+                    // We have tool calls, render them
+                    console.log('Rendering...');
+                    try {
+                        renderAll();
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('statsContainer').style.display = 'grid';
+                        updateLiveStatus(`✅ Loaded ${allEvents.length} events`);
+                        console.log('Load complete!');
+                    } catch (renderError) {
+                        throw new Error(`Rendering failed: ${renderError.message}`);
+                    }
+                }
+            } catch (error) {
+                let errorMessage = error.message;
+                if (error.name === 'AbortError') {
+                    errorMessage = 'Request timed out after 30 seconds. The server might be slow or unresponsive.';
+                }
+
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('loading').innerHTML =
+                    `<div class="error">
+                        <strong>Error loading from URL:</strong><br>
+                        ${errorMessage}<br><br>
+                        <small>Check browser console (F12) for details</small><br>
+                        <small>Common issues:</small><br>
+                        <small>• File not found (404 error)</small><br>
+                        <small>• CORS error (blocked by browser security)</small><br>
+                        <small>• Invalid JSONL format (check console for parse errors)</small><br>
+                        <small>• Network timeout (server too slow)</small><br>
+                        <small>• Server CORS headers missing</small>
+                    </div>`;
+                console.error('Error loading from URL:', error);
+                console.error('Error name:', error.name);
+                console.error('Full error details:', error.stack);
+            }
+        }
+
+        // Start live monitoring
+        function startLiveToolCallMonitoring() {
+            updateLiveStatus('🔴 Live monitoring...');
+            liveMonitorInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(toolUsageEndpoint);
+                    if (!response.ok) return;
+
+                    const text = await response.text();
+                    const lines = text.split('\n');
+                    const newEvents = lines
+                        .filter(line => line.trim())
+                        .map(line => JSON.parse(line));
+
+                    if (newEvents.length > lastEventCount) {
+                        // New events detected
+                        allEvents = newEvents;
+                        lastEventCount = newEvents.length;
+                        processData();
+
+                        // Only render if we have tool call data
+                        if (toolCallData.length > 0) {
+                            renderAll();
+                            document.getElementById('loading').style.display = 'none';
+                            document.getElementById('statsContainer').style.display = 'grid';
+                            updateLiveStatus(`🔴 Live (${allEvents.length} events, updated ${new Date().toLocaleTimeString()})`);
+                        } else {
+                            // Still waiting for tool calls
+                            document.getElementById('loading').innerHTML =
+                                `<div style="color: #666; padding: 20px; text-align: center;">
+                                    <strong>⏳ Waiting for tool calls...</strong><br><br>
+                                    <small>Session loaded with ${allEvents.length} events (text/thinking blocks only).</small><br>
+                                    <small>Tool call data will appear here once the agent starts using tools.</small><br>
+                                    <small>Live monitoring is active and will auto-update.</small>
+                                </div>`;
+                            updateLiveStatus(`⏳ Waiting for tool calls (${allEvents.length} events, updated ${new Date().toLocaleTimeString()})`);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Live monitor error:', error);
+                    updateLiveStatus(`⚠️ Error: ${error.message}`);
+                }
+            }, 2000); // Poll every 2 seconds
+        }
+
+        // Stop live monitoring
+        function stopLiveMonitoring() {
+            if (liveMonitorInterval) {
+                clearInterval(liveMonitorInterval);
+                liveMonitorInterval = null;
+                updateLiveStatus('⏸️ Monitoring stopped');
+            }
+        }
+
+        // Update live status indicator
+        function updateLiveStatus(message) {
+            const statusElement = document.getElementById('liveStatus');
+            if (statusElement) {
+                statusElement.textContent = message;
+            }
+        }
 
         // Context weight calculation functions
         function getBashCommandWeight(command) {
@@ -611,6 +976,87 @@
             if (weight <= 5) return { label: 'Moderate', color: '#FFD700', class: 'moderate' };
             if (weight <= 8) return { label: 'Heavy', color: '#FFA500', class: 'heavy' };
             return { label: 'Critical', color: '#FF4500', class: 'critical' };
+        }
+
+        // Load session log from URL
+        async function loadSessionFromUrl(url) {
+            try {
+                console.log('Loading session log from URL:', url);
+
+                // Add timeout to prevent hanging
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                console.log('Session log response status:', response.status, response.statusText);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const text = await response.text();
+                console.log('Received session log text, length:', text.length);
+
+                const lines = text.split('\n');
+                console.log('Split into lines:', lines.length);
+
+                // Parse token/session data (same logic as loadAndProcessTokenFile)
+                tokenData = lines
+                    .filter(line => line.trim())
+                    .map(line => {
+                        try {
+                            return JSON.parse(line);
+                        } catch (err) {
+                            return null;
+                        }
+                    })
+                    .filter(entry => entry && entry.message && entry.message.usage)
+                    .map(entry => ({
+                        timestamp: new Date(entry.timestamp),
+                        inputTokens: entry.message.usage.input_tokens || 0,
+                        cacheRead: entry.message.usage.cache_read_input_tokens || 0,
+                        cacheCreation: entry.message.usage.cache_creation_input_tokens || 0,
+                        outputTokens: entry.message.usage.output_tokens || 0
+                    }));
+
+                // Sort by timestamp
+                tokenData.sort((a, b) => a.timestamp - b.timestamp);
+
+                // Add cumulative totals
+                let cumInput = 0, cumCacheRead = 0, cumCacheCreation = 0, cumOutput = 0;
+                tokenData.forEach(d => {
+                    cumInput += d.inputTokens;
+                    cumCacheRead += d.cacheRead;
+                    cumCacheCreation += d.cacheCreation;
+                    cumOutput += d.outputTokens;
+                    d.cumInputTokens = cumInput;
+                    d.cumCacheRead = cumCacheRead;
+                    d.cumCacheCreation = cumCacheCreation;
+                    d.cumOutputTokens = cumOutput;
+                    d.cumTotal = cumInput + cumCacheRead + cumCacheCreation + cumOutput;
+                });
+
+                console.log('Parsed token data entries:', tokenData.length);
+
+                if (tokenData.length === 0) {
+                    console.warn('No valid token data found in session log. Make sure the file contains usage information.');
+                } else {
+                    renderTokenTracking();
+                    console.log(`✅ Loaded ${tokenData.length} session log entries with token data`);
+                }
+
+            } catch (error) {
+                let errorMessage = error.message;
+                if (error.name === 'AbortError') {
+                    errorMessage = 'Request timed out after 30 seconds. The server might be slow or unresponsive.';
+                }
+
+                console.error(`Error loading session log from URL: ${errorMessage}`);
+                console.error('Full error:', error);
+                // Re-throw so caller can handle it
+                throw error;
+            }
         }
 
         // Load and process file
@@ -1841,22 +2287,105 @@
             return resources;
         }
 
+        // Store zoom state for clustering view
+        let clusteringZoomTransform = null;
+
         // Render clustering
         function renderClustering() {
             const svg = d3.select('#clusterGraph');
+
+            // Save current zoom transform before clearing
+            const existingG = svg.select('g');
+            if (!existingG.empty()) {
+                const transform = existingG.attr('transform');
+                if (transform) {
+                    clusteringZoomTransform = transform;
+                }
+            }
+
             svg.selectAll('*').remove();
 
             const clusterBy = document.getElementById('clusterBy').value;
             const minLinks = parseInt(document.getElementById('minLinks').value);
+
+            // Collect unique agents, directories, and files for filter dropdowns
+            const agents = new Set();
+            const directories = new Set();
+            const files = new Set();
+
+            toolCallData.forEach(call => {
+                agents.add(call.agentId);
+                const resources = extractResources(call);
+                resources.forEach(res => {
+                    if (res.directory) directories.add(res.directory);
+                    if (res.type === 'file' || res.type === 'glob') {
+                        files.add(res.value);
+                    }
+                });
+            });
+
+            // Populate filter dropdowns (preserve current selections)
+            const filterAgent = document.getElementById('filterAgent');
+            const filterDirectory = document.getElementById('filterDirectory');
+            const filterFile = document.getElementById('filterFile');
+
+            const currentAgents = Array.from(filterAgent.selectedOptions).map(o => o.value);
+            const currentDirs = Array.from(filterDirectory.selectedOptions).map(o => o.value);
+            const currentFiles = Array.from(filterFile.selectedOptions).map(o => o.value);
+
+            // Update agent filter
+            filterAgent.innerHTML = '<option value="">All Agents</option>' +
+                Array.from(agents).sort().map(a =>
+                    `<option value="${a}" ${currentAgents.includes(a) ? 'selected' : ''}>${a}</option>`
+                ).join('');
+
+            // Update directory filter
+            filterDirectory.innerHTML = '<option value="">All Directories</option>' +
+                Array.from(directories).sort().map(d =>
+                    `<option value="${d}" ${currentDirs.includes(d) ? 'selected' : ''}>${d}</option>`
+                ).join('');
+
+            // Update file filter
+            filterFile.innerHTML = '<option value="">All Files</option>' +
+                Array.from(files).sort().map(f =>
+                    `<option value="${f}" ${currentFiles.includes(f) ? 'selected' : ''}>${f}</option>`
+                ).join('');
+
+            // Get selected filter values
+            const selectedAgents = Array.from(filterAgent.selectedOptions).map(o => o.value).filter(v => v !== '');
+            const selectedDirs = Array.from(filterDirectory.selectedOptions).map(o => o.value).filter(v => v !== '');
+            const selectedFiles = Array.from(filterFile.selectedOptions).map(o => o.value).filter(v => v !== '');
 
             // Build graph structure
             const nodes = [];
             const links = [];
             const resourceToNodes = new Map();
 
-            // Create nodes for each tool call
+            // Create nodes for each tool call (with filtering)
             toolCallData.forEach((call, idx) => {
+                // Apply agent filter
+                if (selectedAgents.length > 0 && !selectedAgents.includes(call.agentId)) {
+                    return;
+                }
+
                 const resources = extractResources(call);
+
+                // Apply directory filter
+                if (selectedDirs.length > 0) {
+                    const hasMatchingDir = resources.some(res =>
+                        res.directory && selectedDirs.includes(res.directory)
+                    );
+                    if (!hasMatchingDir) return;
+                }
+
+                // Apply file filter
+                if (selectedFiles.length > 0) {
+                    const hasMatchingFile = resources.some(res =>
+                        selectedFiles.includes(res.value)
+                    );
+                    if (!hasMatchingFile) return;
+                }
+
                 const node = {
                     id: idx,
                     toolCall: call,
@@ -1943,6 +2472,11 @@
                     g.attr('transform', event.transform);
                 });
             svg.call(zoom);
+
+            // Restore previous zoom transform if it exists
+            if (clusteringZoomTransform) {
+                g.attr('transform', clusteringZoomTransform);
+            }
 
             // Draw links
             const link = g.append('g')
@@ -2054,7 +2588,29 @@
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 10);
 
+            // Build active filters display
+            const activeFilters = [];
+            if (selectedAgents.length > 0) {
+                activeFilters.push(`Agents: ${selectedAgents.join(', ')}`);
+            }
+            if (selectedDirs.length > 0) {
+                activeFilters.push(`Directories: ${selectedDirs.join(', ')}`);
+            }
+            if (selectedFiles.length > 0) {
+                activeFilters.push(`Files: ${selectedFiles.join(', ')}`);
+            }
+
+            const filtersHtml = activeFilters.length > 0 ? `
+                <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-left: 4px solid #2196F3; border-radius: 3px;">
+                    <strong>Active Filters:</strong>
+                    <div style="margin-top: 5px;">
+                        ${activeFilters.map(f => `• ${f}`).join('<br>')}
+                    </div>
+                </div>
+            ` : '';
+
             legend.innerHTML = `
+                ${filtersHtml}
                 <strong>Top Resource Clusters (by ${clusterBy}):</strong>
                 <div style="margin-top: 10px;">
                     ${sortedClusters.map(([resource, count]) => `
@@ -2066,7 +2622,7 @@
                 <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
                     <strong>Graph Statistics:</strong>
                     <div style="margin-top: 5px;">
-                        • ${filteredNodes.length} connected tool calls<br>
+                        • ${filteredNodes.length} connected tool calls (of ${toolCallData.length} total)<br>
                         • ${links.length} connections<br>
                         • ${clusterStats.size} resource clusters
                     </div>

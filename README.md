@@ -130,6 +130,16 @@ This is useful for:
 - Monitoring API usage and performance
 - Learning how the multi-agent system orchestrates tasks
 
+### Live Observability Monitor
+
+For real-time visual monitoring of agent execution with interactive profiling:
+
+```bash
+./observability/live_monitor.sh
+```
+
+This launches a web-based profiler that automatically tracks your current session, displaying tool calls, timing metrics, and agent interactions in real-time. The visualization updates live as your agents work, providing an interactive dashboard for monitoring pipeline execution and performance analysis.
+
 The pipeline will:
 1. Scan for services (Cargo.toml, go.mod, package.json, pyproject.toml files)
 2. Build dependency graph

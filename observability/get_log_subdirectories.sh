@@ -1,7 +1,11 @@
 #!/bin/bash
 
-# Get the current session ID by finding the most recently modified session file or directory
-# Usage: ./get_session_id.sh [project_dir]
+# Get the log subdirectories (session file and tool calls file) for the current project
+# Returns two paths:
+#   1. Session file path (.claude/projects/...)
+#   2. Tool calls file path (project_dir/logs/latest/tool_calls.jsonl)
+#
+# Usage: ./get_log_subdirectories.sh [project_dir]
 
 # Default to current working directory
 PROJECT_DIR="${1:-$(pwd)}"
@@ -38,4 +42,8 @@ fi
 # Extract project name from the Claude project directory path
 PROJECT_NAME=$(basename "$CLAUDE_PROJECT_DIR")
 
-echo "$HOME/.claude/projects/$PROJECT_NAME/$SESSION_ID.jsonl"
+# Output both paths (one per line)
+# Line 1: Session file path (relative to HOME)
+echo ".claude/projects/$PROJECT_NAME/$SESSION_ID.jsonl"
+# Line 2: Tool calls file path
+echo "$PROJECT_DIR/logs/latest/tool_calls.jsonl"
