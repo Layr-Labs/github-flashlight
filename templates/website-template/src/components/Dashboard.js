@@ -143,102 +143,47 @@ function Dashboard() {
             <div className="stat-number">{metadata.totalLibraries}</div>
             <div className="stat-label">Libraries</div>
           </div>
-          <div className="stat-card">
-            <div className="stat-number">{architecture.patterns.length}</div>
-            <div className="stat-label">Architecture Patterns</div>
-          </div>
+          {architecture.patterns && architecture.patterns.length > 0 && (
+            <div className="stat-card">
+              <div className="stat-number">{architecture.patterns.length}</div>
+              <div className="stat-label">Architecture Patterns</div>
+            </div>
+          )}
         </div>
       </section>
 
-      {/* Interactive System Flow Visualization */}
-      <section className="overview-section">
-        <h3>System Architecture Flow</h3>
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '1.5rem',
-          alignItems: 'center',
-          padding: '2rem',
-          background: 'white',
-          borderRadius: '8px',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
-        }}>
-          {[
-            { label: 'Rollups/Clients', desc: 'External blockchain rollup systems requesting data availability', color: '#667eea' },
-            { label: 'Proxy (REST/JSON-RPC)', desc: 'API gateway handling client requests', color: '#764ba2' },
-            { label: 'Disperser Services', desc: 'API, Batcher, Encoder, Controller - process and prepare data', color: '#667eea' },
-            { label: 'DA Nodes (Operators)', desc: 'Distributed operators storing encoded data', color: '#764ba2' },
-            { label: 'Retriever Service', desc: 'Reconstructs data from DA nodes', color: '#667eea' },
-            { label: 'Rollups/Clients', desc: 'Receive reconstructed data', color: '#764ba2' }
-          ].map((node, index, arr) => (
-            <React.Fragment key={index}>
-              <div
-                style={{
-                  width: '100%',
-                  maxWidth: '500px',
-                  padding: '1.5rem',
-                  background: `linear-gradient(135deg, ${node.color} 0%, ${node.color}dd 100%)`,
-                  color: 'white',
-                  borderRadius: '8px',
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
-                  position: 'relative'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'scale(1.05) translateY(-5px)';
-                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(102, 126, 234, 0.5)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'scale(1) translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
-                }}
-                title={node.desc}
-              >
-                <div style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '0.5rem' }}>
-                  {node.label}
-                </div>
-                <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>
-                  {node.desc}
-                </div>
-              </div>
-              {index < arr.length - 1 && (
-                <div style={{
-                  fontSize: '2rem',
-                  color: '#667eea',
-                  fontWeight: 'bold',
-                  animation: 'bounce 2s infinite'
-                }}>
-                  ↓
-                </div>
-              )}
-            </React.Fragment>
-          ))}
-        </div>
-        <style>{`
-          @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-          }
-        `}</style>
-      </section>
+      {/* Architecture overview from markdown */}
+      {architecture.overview && (
+        <section className="overview-section">
+          <h3>Architecture Overview</h3>
+          <div className="markdown-content" style={{
+            padding: '2rem',
+            background: 'white',
+            borderRadius: '8px',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+          }}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {architecture.overview}
+            </ReactMarkdown>
+          </div>
+        </section>
+      )}
 
       {dataFlowsSection && dataFlowsSection.subsections && dataFlowsSection.subsections.length > 0 && (
         <section className="key-flows-section">
-          <h3>Data Flows</h3>
+          <h3>Major Data Flows</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             {dataFlowsSection.subsections.map((flowSubsection, i) => {
               // Parse steps from the subsection content - look for lines with arrows
               const lines = flowSubsection.content.split('\n');
               const flowLine = lines.find(line => line.includes('→') || line.includes('->'));
 
-              if (!flowLine) return null;
-
               const steps = flowLine
-                .split(/→|->/)
-                .map(s => s.trim())
-                .filter(s => s.length > 0);
+                ? flowLine.split(/→|->/).map(s => s.trim()).filter(s => s.length > 0)
+                : [];
+
+              const flowKey = `flow-${i}`;
+              const isExpanded = expandedSubsections[flowKey];
 
               return (
                 <div key={i} style={{
@@ -248,69 +193,141 @@ function Dashboard() {
                   boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
                   border: '2px solid #e5e7eb'
                 }}>
-                  <h4 style={{
-                    fontSize: '1.3rem',
-                    fontWeight: '700',
-                    color: '#1f2937',
-                    marginBottom: '1.5rem',
-                    borderBottom: '2px solid #667eea',
-                    paddingBottom: '0.5rem'
-                  }}>
-                    {flowSubsection.title}
-                  </h4>
                   <div style={{
                     display: 'flex',
+                    justifyContent: 'space-between',
                     alignItems: 'center',
-                    gap: '1rem',
-                    flexWrap: 'wrap',
-                    justifyContent: 'center'
+                    marginBottom: steps.length > 0 || isExpanded ? '1.5rem' : 0
                   }}>
-                    {steps.map((step, stepIndex) => (
-                      <React.Fragment key={stepIndex}>
-                        <div
-                          style={{
-                            padding: '1rem 1.5rem',
-                            background: `linear-gradient(135deg, ${stepIndex % 2 === 0 ? '#667eea' : '#764ba2'} 0%, ${stepIndex % 2 === 0 ? '#667eeadd' : '#764ba2dd'} 100%)`,
-                            color: 'white',
-                            borderRadius: '6px',
-                            fontWeight: '600',
-                            fontSize: '0.95rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.3s ease',
-                            boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
-                            minWidth: '140px',
-                            textAlign: 'center',
-                            position: 'relative'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = 'scale(1.05) translateY(-3px)';
-                            e.currentTarget.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.5)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = 'scale(1) translateY(0)';
-                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
-                          }}
-                        >
-                          <div style={{ fontSize: '0.75rem', opacity: 0.8, marginBottom: '0.25rem' }}>
-                            Step {stepIndex + 1}
-                          </div>
-                          {step}
-                        </div>
-                        {stepIndex < steps.length - 1 && (
-                          <div style={{
-                            fontSize: '1.5rem',
-                            color: '#667eea',
-                            fontWeight: 'bold'
-                          }}>
-                            →
-                          </div>
-                        )}
-                      </React.Fragment>
-                    ))}
+                    <h4 style={{
+                      fontSize: '1.3rem',
+                      fontWeight: '700',
+                      color: '#1f2937',
+                      borderBottom: '2px solid #667eea',
+                      paddingBottom: '0.5rem',
+                      margin: 0
+                    }}>
+                      {flowSubsection.title}
+                    </h4>
+                    <button
+                      className="subsection-toggle"
+                      onClick={() => {
+                        setExpandedSubsections(prev => ({
+                          ...prev,
+                          [flowKey]: !prev[flowKey]
+                        }));
+                      }}
+                      aria-label={isExpanded ? "Collapse" : "Expand"}
+                    >
+                      {isExpanded ? "−" : "+"}
+                    </button>
                   </div>
+
+                  {steps.length > 0 && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '1rem',
+                      flexWrap: 'wrap',
+                      justifyContent: 'center',
+                      marginBottom: isExpanded ? '1.5rem' : 0
+                    }}>
+                      {steps.map((step, stepIndex) => (
+                        <React.Fragment key={stepIndex}>
+                          <div
+                            style={{
+                              padding: '1rem 1.5rem',
+                              background: `linear-gradient(135deg, ${stepIndex % 2 === 0 ? '#667eea' : '#764ba2'} 0%, ${stepIndex % 2 === 0 ? '#667eeadd' : '#764ba2dd'} 100%)`,
+                              color: 'white',
+                              borderRadius: '6px',
+                              fontWeight: '600',
+                              fontSize: '0.95rem',
+                              cursor: 'pointer',
+                              transition: 'all 0.3s ease',
+                              boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
+                              minWidth: '140px',
+                              textAlign: 'center',
+                              position: 'relative'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'scale(1.05) translateY(-3px)';
+                              e.currentTarget.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.5)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'scale(1) translateY(0)';
+                              e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
+                            }}
+                          >
+                            <div style={{ fontSize: '0.75rem', opacity: 0.8, marginBottom: '0.25rem' }}>
+                              Step {stepIndex + 1}
+                            </div>
+                            {step}
+                          </div>
+                          {stepIndex < steps.length - 1 && (
+                            <div style={{
+                              fontSize: '1.5rem',
+                              color: '#667eea',
+                              fontWeight: 'bold'
+                            }}>
+                              →
+                            </div>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  )}
+
+                  {isExpanded && (
+                    <div className="markdown-content">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          code({ node, inline, className, children, ...props }) {
+                            const match = /language-(\w+)/.exec(className || '');
+                            const language = match ? match[1] : '';
+                            const codeString = String(children).replace(/\n$/, '');
+
+                            if (!inline && language === 'mermaid') {
+                              return <MermaidDiagram chart={codeString} />;
+                            }
+
+                            if (!inline && language) {
+                              try {
+                                const highlighted = hljs.highlight(codeString, {
+                                  language: language,
+                                  ignoreIllegals: true
+                                });
+                                return (
+                                  <code
+                                    className={`${className} hljs`}
+                                    dangerouslySetInnerHTML={{ __html: highlighted.value }}
+                                    {...props}
+                                  />
+                                );
+                              } catch (e) {
+                                return (
+                                  <code className={className} {...props}>
+                                    {children}
+                                  </code>
+                                );
+                              }
+                            }
+
+                            return (
+                              <code className={className} {...props}>
+                                {children}
+                              </code>
+                            );
+                          }
+                        }}
+                      >
+                        {flowSubsection.content}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </div>
               );
-            }).filter(Boolean)}
+            })}
           </div>
         </section>
       )}
@@ -347,43 +364,25 @@ function Dashboard() {
         </div>
       </section>
 
-      <section className="tech-stack-section">
-        <h3>Technology Stack</h3>
-        <div className="tech-grid">
-          <div className="tech-category">
-            <h4>Languages</h4>
-            <ul>
-              {architecture.techStack.languages.map((lang, i) => (
-                <li key={i}>{lang}</li>
+      {architecture.techStack && (
+        <section className="tech-stack-section">
+          <h3>Technology Stack</h3>
+          <div className="tech-grid">
+            {Object.entries(architecture.techStack)
+              .filter(([, items]) => Array.isArray(items) && items.length > 0)
+              .map(([category, items]) => (
+                <div key={category} className="tech-category">
+                  <h4>{category.charAt(0).toUpperCase() + category.slice(1)}</h4>
+                  <ul>
+                    {items.map((item, i) => (
+                      <li key={i}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
           </div>
-          <div className="tech-category">
-            <h4>Frameworks</h4>
-            <ul>
-              {architecture.techStack.frameworks.map((fw, i) => (
-                <li key={i}>{fw}</li>
-              ))}
-            </ul>
-          </div>
-          <div className="tech-category">
-            <h4>Databases</h4>
-            <ul>
-              {architecture.techStack.databases.map((db, i) => (
-                <li key={i}>{db}</li>
-              ))}
-            </ul>
-          </div>
-          <div className="tech-category">
-            <h4>Cryptography</h4>
-            <ul>
-              {architecture.techStack.cryptography.map((crypto, i) => (
-                <li key={i}>{crypto}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <section className="patterns-section">
         <h3>Architecture Patterns</h3>

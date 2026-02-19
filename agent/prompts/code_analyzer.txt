@@ -416,7 +416,7 @@ Examples:
 - Only include services that are ACTIVELY USED in the code (not just listed as dependencies)
 - Be specific about what features/APIs are being used
 - Document the integration method (which SDK, library, or API approach)
-- Distinguish between internal services (use application_interactions) and external third-party services (use third_party_applications)
+- Distinguish between internal services (use application_interactions) and external third-party services (use external_applications)
 - If you find references but cannot determine if they're actively used, note this in the description
 
 **STEP 7: DOCUMENT API SURFACE**

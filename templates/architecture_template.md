@@ -108,13 +108,14 @@ _Generated on {timestamp}_
 
 ### 6.1 Application-Level Flows
 
-Document 3-5 major end-to-end flows. For EACH flow, provide:
+Document 3-5 major end-to-end **inter-application** flows. For EACH flow, provide:
 
 1. **Flow Name & Description**: Brief overview of what this flow accomplishes
 2. **Mermaid Sequence Diagram**: Visual representation of the flow
 3. **Detailed Steps**: Step-by-step breakdown with technical details
 4. **Error Paths**: How errors are handled at each step
 5. **Key Technical Details**: Data formats, protocols, transformations
+6. **Key Parameters**: Key system params used to guard and faciliate safety flows wrt to distributed systems and blockchain consensus theory 
 
 #### Example Flow Format:
 

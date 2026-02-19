@@ -228,9 +228,9 @@ When creating diagrams for library data flows:
 - Include both happy path and error paths
 - Add notes for complex logic or important context
 
-## Dependencies
+## Library Dependencies
 
-### External Dependencies
+### External Libraries
 
 - **[package-name]** ([VERSION]): [One-sentence description of what the package does]. [2-3 sentences describing key features, APIs, or capabilities provided]. [How this library uses it - specific functions, patterns, or integration points]. [Any notable configuration or usage details.]
 
@@ -240,7 +240,7 @@ When creating diagrams for library data flows:
 
 [List all major external dependencies. Focus on direct dependencies that are critical to functionality.]
 
-### Internal Dependencies
+### Internal Libraries
 
 [Only include this section if this library depends on OTHER internal libraries in the codebase]
 

@@ -487,7 +487,7 @@ function ComponentDetails({ searchQuery }) {
     <div className="component-list-view">
       <div className="list-header">
         <h1>All Components</h1>
-        <p>Browse all {analysisData.components.length} components in the EigenDA codebase</p>
+        <p>Browse all {analysisData.components.length} components in the codebase</p>
       </div>
 
       {applications.length > 0 && (

@@ -4,6 +4,7 @@ import LibraryGraph from './components/LibraryGraph';
 import ApplicationGraph from './components/ApplicationGraph';
 import ComponentDetails from './components/ComponentDetails';
 import Dashboard from './components/Dashboard';
+import analysisData from './data/analysisData';
 import './styles/App.css';
 
 function App() {
@@ -14,7 +15,7 @@ function App() {
     <Router>
       <div className="App">
         <header className="app-header">
-          <h1 className="app-title">EigenDA Spec</h1>
+          <h1 className="app-title">{analysisData.metadata?.projectName || 'Codebase Analysis'}</h1>
           <p className="app-subtitle">Codebase Explorer</p>
 
           <ul className="nav-menu">

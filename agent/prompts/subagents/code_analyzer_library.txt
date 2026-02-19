@@ -12,14 +12,12 @@ Component Information:
 - Use Glob, Grep, and Read tools to analyze code within this directory
 - The component_path is relative to `/tmp/{SERVICE_NAME}/project/`
 
-{upstream_context}
-
 Perform deep analysis while respecting the output structure of `templates/analysis-template/library_analysis_template.md`:
 1. Architecture: Overall design patterns and structure
 2. Key Components: Major modules, structs, classes, functions
 3. Data Flows: Important data paths and control flows
-4. External Dependencies: Third-party libraries used
-5. Internal Dependencies: HOW this library uses its direct library dependencies (from context above)
+4. External Library Dependencies: Third-party libraries used
+5. Internal Library Dependencies: HOW this library uses its direct library dependencies (provided via {upstream_context})
 6. API Surface: Public interfaces exposed to other libraries/applications
 
 Focus on understanding how this library integrates with its direct dependencies.

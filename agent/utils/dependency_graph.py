@@ -2,7 +2,7 @@
 
 from typing import List, Tuple, Dict
 from pathlib import Path
-from agent.schemas.service import Library, Application
+from agent.schemas.core import Library, Application
 from agent.schemas.dependency_graph import DependencyGraph
 
 

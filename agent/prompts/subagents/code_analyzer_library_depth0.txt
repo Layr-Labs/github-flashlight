@@ -18,7 +18,7 @@ Perform deep analysis while respecting the output structure of `templates/analys
 1. Architecture: Overall design patterns and structure
 2. Key Components: Major modules, structs, classes, functions
 3. Data Flows: Important data paths and control flows
-4. External Dependencies: Third-party libraries used and their purposes
+4. External Library Dependencies: Third-party libraries used and their purpose
 5. API Surface: Public interfaces exposed to other libraries/applications
 
 Save your analysis to:

@@ -17,8 +17,8 @@ Steps:
    - Use Write to save updated application graph
 
 3. **Enrich components.json with third-party integrations:**
-   - Extract third_party_applications from application analyses (external services like AWS, Stripe, etc.)
-   - Update components.json to add/enrich third_party_applications field for each application
+   - Extract external_applications from application analyses (external services like AWS, Stripe, etc.)
+   - Update components.json to add/enrich external_applications field for each application
    - Use Write to save enriched components.json
 
 4. **Load documentation templates:**

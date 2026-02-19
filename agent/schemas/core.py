@@ -14,9 +14,50 @@ class BaseComponent:
     root_path: Path  # Absolute path to component root
     manifest_path: Optional[Path]  # Path to Cargo.toml, package.json, etc.
     description: str  # Brief description from manifest or README
-    external_dependencies: List[str] = field(default_factory=list)  # Third-party packages
     key_files: List[Path] = field(default_factory=list)  # Important files
     metadata: Dict[str, Any] = field(default_factory=dict)  # Extra info
+
+
+@dataclass
+class Library(BaseComponent):
+    """Represents a reusable library/package without an entrypoint.
+
+    Libraries provide shared code and utilities consumed by applications and other libraries.
+    Examples: utility libraries, data models, shared business logic.
+    """
+
+    external_libraries: List[Library] = field(default_factory=list)
+    internal_libraries: List[Library] = field(default_factory=list)  # Other internal libraries this depends on
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary for JSON output."""
+        return {
+            "name": self.name,
+            "type": self.type,
+            "classification": "library",
+            "root_path": str(self.root_path),
+            "manifest_path": str(self.manifest_path) if self.manifest_path else None,
+            "description": self.description,
+            "external_libraries": self.external_libraries,
+            "internal_libraries": self.internal_libraries,
+            "key_files": [str(f) for f in self.key_files],
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Library":
+        """Deserialize from dictionary."""
+        return cls(
+            name=data["name"],
+            type=data["type"],
+            root_path=Path(data["root_path"]),
+            manifest_path=Path(data["manifest_path"]) if data.get("manifest_path") else None,
+            description=data["description"],
+            external_dependencies=data.get("external_dependencies", []),
+            internal_dependencies=data.get("internal_dependencies", []),
+            key_files=[Path(f) for f in data.get("key_files", [])],
+            metadata=data.get("metadata", {}),
+        )
 
 
 @dataclass
@@ -27,10 +68,9 @@ class Application(BaseComponent):
     Examples: web servers, CLI tools, background workers, APIs.
     """
 
-    libraries_used: List[str] = field(default_factory=list)  # Internal libraries this application uses
-    external_dependencies: List[str] = field(default_factory=list)  # Applications that call this application
-    internal_dependencies: List[str] = field(default_factory=list)  # Applications that this application calls
-    # Note: external_dependencies inherited from BaseComponent represents third-party apps this integrates with
+    libraries_used: List[Library] = field(default_factory=list)  # Internal libraries this application uses
+    external_applications: List[Application] = field(default_factory=list)  # Applications that call this application
+    internal_applications: List[Application] = field(default_factory=list)  # Applications that this application calls
 
     def to_dict(self) -> dict:
         """Serialize to dictionary for JSON output."""
@@ -41,10 +81,10 @@ class Application(BaseComponent):
             "root_path": str(self.root_path),
             "manifest_path": str(self.manifest_path) if self.manifest_path else None,
             "description": self.description,
-            "external_dependencies": self.external_dependencies,
+            "external_applications": self.external_applications,
             "libraries_used": self.libraries_used,
-            "external_dependencies": self.external_dependencies,
-            "internal_dependencies": self.internal_dependencies,
+            "external_applications": self.external_applications,
+            "internal_applications": self.internal_applications,
             "key_files": [str(f) for f in self.key_files],
             "metadata": self.metadata,
         }
@@ -66,49 +106,8 @@ class Application(BaseComponent):
         )
 
 
-@dataclass
-class Library(BaseComponent):
-    """Represents a reusable library/package without an entrypoint.
-
-    Libraries provide shared code and utilities consumed by applications and other libraries.
-    Examples: utility libraries, data models, shared business logic.
-    """
-
-    dependencies: List[str] = field(default_factory=list)  # Other internal libraries this depends on
-
-    def to_dict(self) -> dict:
-        """Serialize to dictionary for JSON output."""
-        return {
-            "name": self.name,
-            "type": self.type,
-            "classification": "library",
-            "root_path": str(self.root_path),
-            "manifest_path": str(self.manifest_path) if self.manifest_path else None,
-            "description": self.description,
-            "external_dependencies": self.external_dependencies,
-            "dependencies": self.dependencies,
-            "key_files": [str(f) for f in self.key_files],
-            "metadata": self.metadata,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "Library":
-        """Deserialize from dictionary."""
-        return cls(
-            name=data["name"],
-            type=data["type"],
-            root_path=Path(data["root_path"]),
-            manifest_path=Path(data["manifest_path"]) if data.get("manifest_path") else None,
-            description=data["description"],
-            external_dependencies=data.get("external_dependencies", []),
-            dependencies=data.get("dependencies", []),
-            key_files=[Path(f) for f in data.get("key_files", [])],
-            metadata=data.get("metadata", {}),
-        )
-
-
 # Backward compatibility alias
-Service = Application | Library
+KnowledgeBasis = Application | Library
 
 
 def component_from_dict(data: dict) -> Application | Library:

@@ -1,10 +1,10 @@
 """Data schemas for code analysis agent."""
 
-from .service import Service, Application, Library
+from .core import KnowledgeBasis, Application, Library
 from .dependency_graph import DependencyGraph, ApplicationEdge
 
 __all__ = [
-    "Service",
+    "KnowledgeBasis",
     "Application",
     "Library",
     "DependencyGraph",
