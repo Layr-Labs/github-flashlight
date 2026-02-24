@@ -1,118 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import hljs from 'highlight.js';
-import MermaidDiagram from './MermaidDiagram';
+import MarkdownContent from './MarkdownContent';
 import analysisData from '../data/analysisData';
 import markdownContent from '../data/markdownContent';
+import { parseMarkdownSections } from '../utils/markdownParser';
 import '../styles/ComponentDetails.css';
-import 'highlight.js/styles/github-dark.css';
 
-// Helper function to parse markdown subsections based on H3 headers
-function parseSubsections(content) {
-  const subsections = [];
-  const lines = content.split('\n');
-  let currentSubsection = null;
-  let currentContent = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // Check if this is an H3 header (### Subsection Name)
-    if (line.startsWith('### ')) {
-      // Save previous subsection if exists
-      if (currentSubsection) {
-        subsections.push({
-          title: currentSubsection,
-          content: currentContent.join('\n').trim()
-        });
-      }
-
-      // Start new subsection
-      currentSubsection = line.substring(4).trim();
-      currentContent = [];
-    } else if (currentSubsection) {
-      // Add line to current subsection content
-      currentContent.push(line);
-    }
-    // Skip lines before the first H3
-  }
-
-  // Add the last subsection
-  if (currentSubsection) {
-    subsections.push({
-      title: currentSubsection,
-      content: currentContent.join('\n').trim()
-    });
-  }
-
-  return subsections;
-}
-
-// Helper function to parse markdown into sections based on H2 headers
-function parseMarkdownSections(markdown) {
-  if (!markdown) return [];
-
-  // Unescape backticks for proper code rendering (both single and triple)
-  markdown = markdown.replace(/\\`/g, '`');
-
-  const sections = [];
-  const lines = markdown.split('\n');
-  let currentSection = null;
-  let currentContent = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // Check if this is an H2 header (## Section Name)
-    if (line.startsWith('## ')) {
-      // Save previous section if exists
-      if (currentSection) {
-        const content = currentContent.join('\n').trim();
-        sections.push({
-          title: currentSection,
-          content: content,
-          subsections: parseSubsections(content)
-        });
-      }
-
-      // Start new section
-      currentSection = line.substring(3).trim();
-      currentContent = [];
-    } else if (currentSection) {
-      // Add line to current section content
-      currentContent.push(line);
-    }
-    // Skip lines before the first H2 (title, metadata, etc.)
-  }
-
-  // Add the last section
-  if (currentSection) {
-    const content = currentContent.join('\n').trim();
-    sections.push({
-      title: currentSection,
-      content: content,
-      subsections: parseSubsections(content)
-    });
-  }
-
-  return sections;
-}
-
-function ComponentDetails({ searchQuery }) {
+function ComponentDetails() {
   const { componentName } = useParams();
   const [selectedComponent, setSelectedComponent] = useState(null);
-  const [filteredComponents, setFilteredComponents] = useState([]);
   const [expandedSubsections, setExpandedSubsections] = useState({});
   const [expandedSections, setExpandedSections] = useState({});
-
-  useEffect(() => {
-    const filtered = analysisData.components.filter(c =>
-      !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    setFilteredComponents(filtered);
-  }, [searchQuery]);
 
   useEffect(() => {
     if (componentName) {
@@ -228,7 +126,6 @@ function ComponentDetails({ searchQuery }) {
 
     // Reorder sections: Data Flows first, then API Surface
     const dataFlowsIndex = markdownSections.findIndex(s => s.title.toLowerCase().includes('data flow'));
-    const apiSurfaceIndex = markdownSections.findIndex(s => s.title.toLowerCase().includes('api surface'));
 
     // Move Data Flows to the top
     if (dataFlowsIndex > 0) {
@@ -361,113 +258,14 @@ function ComponentDetails({ searchQuery }) {
                         </div>
 
                         {isExpanded && (
-                          <div className="markdown-content">
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm]}
-                              components={{
-                                code({ node, inline, className, children, ...props }) {
-                                  const match = /language-(\w+)/.exec(className || '');
-                                  const language = match ? match[1] : '';
-                                  const codeString = String(children).replace(/\n$/, '');
-
-                                  // Handle mermaid diagrams
-                                  if (!inline && language === 'mermaid') {
-                                    return <MermaidDiagram chart={codeString} />;
-                                  }
-
-                                  // Handle code blocks with syntax highlighting
-                                  if (!inline && language) {
-                                    try {
-                                      const highlighted = hljs.highlight(codeString, {
-                                        language: language,
-                                        ignoreIllegals: true
-                                      });
-                                      return (
-                                        <code
-                                          className={`${className} hljs`}
-                                          dangerouslySetInnerHTML={{ __html: highlighted.value }}
-                                          {...props}
-                                        />
-                                      );
-                                    } catch (e) {
-                                      // Fallback if language not supported
-                                      return (
-                                        <code className={className} {...props}>
-                                          {children}
-                                        </code>
-                                      );
-                                    }
-                                  }
-
-                                  // Inline code
-                                  return (
-                                    <code className={className} {...props}>
-                                      {children}
-                                    </code>
-                                  );
-                                }
-                              }}
-                            >
-                              {subsection.content}
-                            </ReactMarkdown>
-                          </div>
+                          <MarkdownContent content={subsection.content} />
                         )}
                       </div>
                     );
                   })}
                 </div>
               ) : (
-                // Render section content normally if no subsections
-                <div className="markdown-content">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      code({ node, inline, className, children, ...props }) {
-                        const match = /language-(\w+)/.exec(className || '');
-                        const language = match ? match[1] : '';
-                        const codeString = String(children).replace(/\n$/, '');
-
-                        // Handle mermaid diagrams
-                        if (!inline && language === 'mermaid') {
-                          return <MermaidDiagram chart={codeString} />;
-                        }
-
-                        // Handle code blocks with syntax highlighting
-                        if (!inline && language) {
-                          try {
-                            const highlighted = hljs.highlight(codeString, {
-                              language: language,
-                              ignoreIllegals: true
-                            });
-                            return (
-                              <code
-                                className={`${className} hljs`}
-                                dangerouslySetInnerHTML={{ __html: highlighted.value }}
-                                {...props}
-                              />
-                            );
-                          } catch (e) {
-                            // Fallback if language not supported
-                            return (
-                              <code className={className} {...props}>
-                                {children}
-                              </code>
-                            );
-                          }
-                        }
-
-                        // Inline code
-                        return (
-                          <code className={className} {...props}>
-                            {children}
-                          </code>
-                        );
-                      }
-                    }}
-                  >
-                    {section.content}
-                  </ReactMarkdown>
-                </div>
+                <MarkdownContent content={section.content} />
                     )}
                   </>
                 )}
@@ -479,60 +277,6 @@ function ComponentDetails({ searchQuery }) {
     );
   }
 
-  // Component list view
-  const applications = filteredComponents.filter(c => c.classification === 'application');
-  const libraries = filteredComponents.filter(c => c.classification === 'library');
-
-  return (
-    <div className="component-list-view">
-      <div className="list-header">
-        <h1>All Components</h1>
-        <p>Browse all {analysisData.components.length} components in the codebase</p>
-      </div>
-
-      {applications.length > 0 && (
-        <section className="component-category">
-          <h2>Applications ({applications.length})</h2>
-          <div className="component-grid">
-            {applications.map((component, i) => (
-              <Link
-                key={i}
-                to={`/${component.name}`}
-                className="component-card"
-              >
-                <div className="component-card-header">
-                  <h3>{component.name}</h3>
-                  <span className="component-card-type">{component.type}</span>
-                </div>
-                <p className="component-card-desc">{component.description}</p>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {libraries.length > 0 && (
-        <section className="component-category">
-          <h2>Libraries ({libraries.length})</h2>
-          <div className="component-grid">
-            {libraries.map((component, i) => (
-              <Link
-                key={i}
-                to={`/${component.name}`}
-                className="component-card"
-              >
-                <div className="component-card-header">
-                  <h3>{component.name}</h3>
-                  <span className="component-card-type">{component.type}</span>
-                </div>
-                <p className="component-card-desc">{component.description}</p>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-    </div>
-  );
 }
 
 export default ComponentDetails;

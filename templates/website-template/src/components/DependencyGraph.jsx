@@ -5,8 +5,23 @@ import './DependencyGraph.css';
 
 function DependencyGraph({ data = {}, services = [] }) {
   const svgRef = useRef();
+  const containerRef = useRef();
+  const tooltipRef = useRef();
   const navigate = useNavigate();
   const [dimensions, setDimensions] = useState({ width: 900, height: 600 });
+
+  // Resize SVG when container changes size
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      const { width } = entries[0].contentRect;
+      if (width > 0) {
+        setDimensions({ width, height: Math.max(500, Math.round(width * 0.6)) });
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!data.nodes || !data.edges || data.nodes.length === 0) {
@@ -22,39 +37,6 @@ function DependencyGraph({ data = {}, services = [] }) {
     // Create copies of nodes and edges to avoid mutating props
     const nodes = data.nodes.map(node => ({ ...node }));
     const edges = data.edges.map(edge => ({ ...edge }));
-
-    // Extract third-party services from external_dependencies and add them as nodes
-    const thirdPartyServices = new Set();
-    data.nodes.forEach(node => {
-      if (node.external_dependencies) {
-        node.external_dependencies.forEach(dep => {
-          thirdPartyServices.add(dep);
-        });
-      }
-    });
-
-    // Add third-party service nodes
-    thirdPartyServices.forEach(service => {
-      nodes.push({
-        id: service,
-        classification: 'third-party',
-        description: `External service: ${service}`,
-        isThirdParty: true
-      });
-    });
-
-    // Add edges from applications to their external dependencies
-    data.nodes.forEach(node => {
-      if (node.external_dependencies) {
-        node.external_dependencies.forEach(dep => {
-          edges.push({
-            source: node.id,
-            target: dep,
-            type: 'external_dependency'
-          });
-        });
-      }
-    });
 
     // Setup zoom
     const zoom = d3.zoom()
@@ -121,6 +103,11 @@ function DependencyGraph({ data = {}, services = [] }) {
       return node.phase === 1 ? '#10B981' : '#A855F7';
     };
 
+    // Tooltip — scoped to the container to prevent body leaks across navigations
+    const tooltip = d3.select(tooltipRef.current)
+      .style('opacity', 0)
+      .style('position', 'absolute');
+
     // Draw nodes
     const node = g.append('g')
       .selectAll('circle')
@@ -131,16 +118,14 @@ function DependencyGraph({ data = {}, services = [] }) {
       .attr('stroke', d => d.isThirdParty ? '#EE5A52' : '#fff')
       .attr('stroke-width', 3)
       .attr('stroke-dasharray', d => d.isThirdParty ? '5,5' : 'none')
-      .style('cursor', d => d.isThirdParty ? 'default' : 'pointer')
+      .style('cursor', 'pointer')
       .call(d3.drag()
         .on('start', dragstarted)
         .on('drag', dragged)
         .on('end', dragended))
       .on('click', (event, d) => {
         event.stopPropagation();
-        if (!d.isThirdParty) {
-          navigate(`/${d.id}`);
-        }
+        navigate(`/${d.id}`);
       })
       .on('mouseover', function(event, d) {
         d3.select(this)
@@ -155,10 +140,11 @@ function DependencyGraph({ data = {}, services = [] }) {
           .style('opacity', .9);
 
         const service = services.find(s => s.name === d.id);
-        const description = service?.description?.substring(0, 100) || 'No description';
+        const description = service?.description?.substring(0, 100) || d.description?.substring(0, 100) || 'No description';
+        const displayName = d.label || d.id;
 
         tooltip.html(`
-          <strong>${d.id}</strong><br/>
+          <strong>${displayName}</strong><br/>
           <em>${d.classification || 'N/A'}</em><br/>
           ${description}${description.length >= 100 ? '...' : ''}
         `)
@@ -169,7 +155,7 @@ function DependencyGraph({ data = {}, services = [] }) {
         d3.select(this)
           .transition()
           .duration(200)
-          .attr('r', 25)
+          .attr('r', d.isThirdParty ? 20 : 25)
           .attr('stroke-width', 3);
 
         tooltip.transition()
@@ -177,12 +163,18 @@ function DependencyGraph({ data = {}, services = [] }) {
           .style('opacity', 0);
       });
 
-    // Node labels
+    // Node labels — truncate long names to avoid overlap; full name is in hover tooltip
+    // Use d.label for display when present (e.g. external services have human-readable labels
+    // while d.id is the URL-safe slug used for navigation).
+    const truncateLabel = (d) => {
+      const text = d.label || d.id;
+      return text.length > 18 ? text.substring(0, 16) + '…' : text;
+    };
     const label = g.append('g')
       .selectAll('text')
       .data(nodes)
       .join('text')
-      .text(d => d.id)
+      .text(d => truncateLabel(d))
       .attr('font-size', d => d.isThirdParty ? 9 : 11)
       .attr('dx', 0)
       .attr('dy', d => d.isThirdParty ? 38 : 45)
@@ -190,11 +182,6 @@ function DependencyGraph({ data = {}, services = [] }) {
       .style('pointer-events', 'none')
       .style('fill', d => d.isThirdParty ? '#FF6B6B' : '#2D3748')
       .style('font-weight', d => d.isThirdParty ? '700' : '600');
-
-    // Tooltip
-    const tooltip = d3.select('body').append('div')
-      .attr('class', 'graph-tooltip')
-      .style('opacity', 0);
 
     // Update positions on tick
     simulation.on('tick', () => {
@@ -232,7 +219,8 @@ function DependencyGraph({ data = {}, services = [] }) {
 
     return () => {
       simulation.stop();
-      tooltip.remove();
+      // Reset tooltip opacity on cleanup rather than removing (it's a ref, not a body-appended div)
+      d3.select(tooltipRef.current).style('opacity', 0);
     };
   }, [data, dimensions, navigate, services]);
 
@@ -246,7 +234,8 @@ function DependencyGraph({ data = {}, services = [] }) {
   }
 
   return (
-    <div className="dependency-graph">
+    <div className="dependency-graph" ref={containerRef} style={{ position: 'relative' }}>
+      <div ref={tooltipRef} className="graph-tooltip" />
       <div className="graph-controls">
         <div className="legend">
           <div className="legend-section">

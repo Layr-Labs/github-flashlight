@@ -2,7 +2,7 @@ import React from 'react';
 import DependencyGraph from './DependencyGraph';
 import analysisData from '../data/analysisData';
 
-function ApplicationGraph({ searchQuery }) {
+function ApplicationGraph() {
   return (
     <div>
       <h2 style={{ padding: '1rem 2rem 0' }}>Application Interaction Graph</h2>

@@ -1,89 +1,11 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import hljs from 'highlight.js';
-import MermaidDiagram from './MermaidDiagram';
+import MarkdownContent from './MarkdownContent';
 import analysisData from '../data/analysisData';
 import summaryMarkdown from '../data/summaryMarkdown';
+import { parseMarkdownSections, parseSubsections } from '../utils/markdownParser';
 import '../styles/Dashboard.css';
-import 'highlight.js/styles/github-dark.css';
 
-// Helper function to parse markdown subsections based on H3 headers
-function parseSubsections(content) {
-  const subsections = [];
-  const lines = content.split('\n');
-  let currentSubsection = null;
-  let currentContent = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    if (line.startsWith('### ')) {
-      if (currentSubsection) {
-        subsections.push({
-          title: currentSubsection,
-          content: currentContent.join('\n').trim()
-        });
-      }
-      currentSubsection = line.substring(4).trim();
-      currentContent = [];
-    } else if (currentSubsection) {
-      currentContent.push(line);
-    }
-  }
-
-  if (currentSubsection) {
-    subsections.push({
-      title: currentSubsection,
-      content: currentContent.join('\n').trim()
-    });
-  }
-
-  return subsections;
-}
-
-// Helper function to parse markdown into sections based on H2 headers
-function parseMarkdownSections(markdown) {
-  if (!markdown) return [];
-
-  markdown = markdown.replace(/\\`/g, '`');
-
-  const sections = [];
-  const lines = markdown.split('\n');
-  let currentSection = null;
-  let currentContent = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    if (line.startsWith('## ')) {
-      if (currentSection) {
-        const content = currentContent.join('\n').trim();
-        sections.push({
-          title: currentSection,
-          content: content,
-          subsections: parseSubsections(content)
-        });
-      }
-      currentSection = line.substring(3).trim();
-      currentContent = [];
-    } else if (currentSection) {
-      currentContent.push(line);
-    }
-  }
-
-  if (currentSection) {
-    const content = currentContent.join('\n').trim();
-    sections.push({
-      title: currentSection,
-      content: content,
-      subsections: parseSubsections(content)
-    });
-  }
-
-  return sections;
-}
 
 function Dashboard() {
   const { metadata, architecture, components } = analysisData;
@@ -156,16 +78,7 @@ function Dashboard() {
       {architecture.overview && (
         <section className="overview-section">
           <h3>Architecture Overview</h3>
-          <div className="markdown-content" style={{
-            padding: '2rem',
-            background: 'white',
-            borderRadius: '8px',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
-          }}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {architecture.overview}
-            </ReactMarkdown>
-          </div>
+          <MarkdownContent content={architecture.overview} />
         </section>
       )}
 
@@ -278,52 +191,7 @@ function Dashboard() {
                   )}
 
                   {isExpanded && (
-                    <div className="markdown-content">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          code({ node, inline, className, children, ...props }) {
-                            const match = /language-(\w+)/.exec(className || '');
-                            const language = match ? match[1] : '';
-                            const codeString = String(children).replace(/\n$/, '');
-
-                            if (!inline && language === 'mermaid') {
-                              return <MermaidDiagram chart={codeString} />;
-                            }
-
-                            if (!inline && language) {
-                              try {
-                                const highlighted = hljs.highlight(codeString, {
-                                  language: language,
-                                  ignoreIllegals: true
-                                });
-                                return (
-                                  <code
-                                    className={`${className} hljs`}
-                                    dangerouslySetInnerHTML={{ __html: highlighted.value }}
-                                    {...props}
-                                  />
-                                );
-                              } catch (e) {
-                                return (
-                                  <code className={className} {...props}>
-                                    {children}
-                                  </code>
-                                );
-                              }
-                            }
-
-                            return (
-                              <code className={className} {...props}>
-                                {children}
-                              </code>
-                            );
-                          }
-                        }}
-                      >
-                        {flowSubsection.content}
-                      </ReactMarkdown>
-                    </div>
+                    <MarkdownContent content={flowSubsection.content} />
                   )}
                 </div>
               );
@@ -384,16 +252,18 @@ function Dashboard() {
         </section>
       )}
 
-      <section className="patterns-section">
-        <h3>Architecture Patterns</h3>
-        <div className="patterns-grid">
-          {architecture.patterns.map((pattern, i) => (
-            <div key={i} className="pattern-card">
-              {pattern}
-            </div>
-          ))}
-        </div>
-      </section>
+      {architecture.patterns && architecture.patterns.length > 0 && (
+        <section className="patterns-section">
+          <h3>Architecture Patterns</h3>
+          <div className="patterns-grid">
+            {architecture.patterns.map((pattern, i) => (
+              <div key={i} className="pattern-card">
+                {pattern}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="quick-links-section">
         <h3>Explore</h3>
@@ -435,104 +305,14 @@ function Dashboard() {
                       </div>
 
                       {isExpanded && (
-                        <div className="markdown-content">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              code({ node, inline, className, children, ...props }) {
-                                const match = /language-(\w+)/.exec(className || '');
-                                const language = match ? match[1] : '';
-                                const codeString = String(children).replace(/\n$/, '');
-
-                                if (!inline && language === 'mermaid') {
-                                  return <MermaidDiagram chart={codeString} />;
-                                }
-
-                                if (!inline && language) {
-                                  try {
-                                    const highlighted = hljs.highlight(codeString, {
-                                      language: language,
-                                      ignoreIllegals: true
-                                    });
-                                    return (
-                                      <code
-                                        className={`${className} hljs`}
-                                        dangerouslySetInnerHTML={{ __html: highlighted.value }}
-                                        {...props}
-                                      />
-                                    );
-                                  } catch (e) {
-                                    return (
-                                      <code className={className} {...props}>
-                                        {children}
-                                      </code>
-                                    );
-                                  }
-                                }
-
-                                return (
-                                  <code className={className} {...props}>
-                                    {children}
-                                  </code>
-                                );
-                              }
-                            }}
-                          >
-                            {subsection.content}
-                          </ReactMarkdown>
-                        </div>
+                        <MarkdownContent content={subsection.content} />
                       )}
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <div className="markdown-content">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    code({ node, inline, className, children, ...props }) {
-                      const match = /language-(\w+)/.exec(className || '');
-                      const language = match ? match[1] : '';
-                      const codeString = String(children).replace(/\n$/, '');
-
-                      if (!inline && language === 'mermaid') {
-                        return <MermaidDiagram chart={codeString} />;
-                      }
-
-                      if (!inline && language) {
-                        try {
-                          const highlighted = hljs.highlight(codeString, {
-                            language: language,
-                            ignoreIllegals: true
-                          });
-                          return (
-                            <code
-                              className={`${className} hljs`}
-                              dangerouslySetInnerHTML={{ __html: highlighted.value }}
-                              {...props}
-                            />
-                          );
-                        } catch (e) {
-                          return (
-                            <code className={className} {...props}>
-                              {children}
-                            </code>
-                          );
-                        }
-                      }
-
-                      return (
-                        <code className={className} {...props}>
-                          {children}
-                        </code>
-                      );
-                    }
-                  }}
-                >
-                  {section.content}
-                </ReactMarkdown>
-              </div>
+              <MarkdownContent content={section.content} />
             )}
           </section>
         ))}

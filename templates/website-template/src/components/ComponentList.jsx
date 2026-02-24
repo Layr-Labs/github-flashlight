@@ -48,6 +48,14 @@ function ComponentList({ components = [] }) {
           >
             📚 Libraries ({components.filter(c => c.classification === 'library').length})
           </button>
+          {components.some(c => c.classification === 'external-service') && (
+            <button
+              className={`filter-btn ${filter === 'external-service' ? 'active' : ''}`}
+              onClick={() => setFilter('external-service')}
+            >
+              ☁️ External Services ({components.filter(c => c.classification === 'external-service').length})
+            </button>
+          )}
         </div>
       </div>
 
@@ -68,7 +76,7 @@ function ComponentList({ components = [] }) {
               <div className="component-header">
                 <h3>{component.name}</h3>
                 <span className={`badge ${component.classification}`}>
-                  {component.classification === 'application' ? '🚀' : '📚'} {component.classification}
+                  {component.classification === 'application' ? '🚀' : component.classification === 'external-service' ? '☁️' : '📚'} {component.classification}
                 </span>
               </div>
 

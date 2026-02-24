@@ -20,14 +20,34 @@ Perform deep analysis:
 1. Architecture: Overall design patterns and structure
 2. Key Components: Major modules, structs, classes, functions
 3. System Flows: End-to-end request/response flows, data processing pipelines
-4. External Dependencies: Third-party libraries used
-5. Library Usage: HOW this application uses internal libraries (from context above)
-6. Application Interactions: Identify and document interactions with OTHER APPLICATIONS:
+4. External Dependencies: Third-party libraries/packages used (e.g. tokio, axum, sqlx)
+5. External Systems: Infrastructure and cloud services this application communicates with at runtime.
+   These are NOT libraries — they are live systems the application connects to:
+   - Databases (PostgreSQL, MySQL, DynamoDB, Redis, MongoDB)
+   - Cloud platforms (GCP Cloud Build, GCP Pub/Sub, GCS, AWS S3, AWS SQS)
+   - Blockchains (Ethereum RPC, Solana RPC)
+   - Payment APIs (Stripe, Braintree)
+   - Auth/security services (Auth0, Intel Trust Authority, AWS Cognito)
+   - Message queues (RabbitMQ, Kafka, Google Pub/Sub)
+   - Any other external network-accessible system
+
+   Format each as a named entry with description:
+   ```
+   ## External Systems
+   - **PostgreSQL**: Primary relational database — stores app metadata, sessions, build records
+   - **GCP Cloud Build**: Triggers verifiable container builds; reads build logs via API
+   - **GCP Pub/Sub**: Subscribes to instance lifecycle events (instance-events topic)
+   - **Ethereum RPC**: Reads smart contract events via JSON-RPC; submits transactions
+   - **Stripe**: Payment processing API — subscription creation, webhook verification
+   ```
+
+6. Library Usage: HOW this application uses internal libraries (from context above)
+7. Application Interactions: Identify and document interactions with OTHER APPLICATIONS IN THIS CODEBASE:
    - HTTP API calls to other applications (extract endpoints, methods, purposes)
    - Shared database access with other applications
    - Message queue/event bus communication
    - gRPC/GraphQL calls to other services
-7. API Surface: Public interfaces this application exposes to other applications
+8. API Surface: Public interfaces this application exposes to other applications
 
 CRITICAL: For application_interactions, identify:
 - Target application name

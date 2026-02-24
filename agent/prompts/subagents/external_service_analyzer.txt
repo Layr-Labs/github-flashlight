@@ -1,0 +1,56 @@
+Analyze how {service_name} is integrated into the {project_name} codebase.
+
+External Service Information:
+- Name: {service_name}
+- Slug (for filename): {service_slug}
+- Category: {service_category}
+- Description: {service_description}
+- Known users in codebase: {known_users}
+
+**Working Directory**: All source code is located at `/tmp/{SERVICE_NAME}/project/`
+- Use Glob, Grep, and Read tools to analyze code within this directory
+- Existing application analyses are at `/tmp/{SERVICE_NAME}/service_analyses/` — read these for context
+
+This is an EXTERNAL SERVICE — a live third-party system this codebase integrates with, not an internal component.
+
+Your goal is to document the integration from the perspective of this codebase: how is this service used, configured, and accessed?
+
+Perform deep analysis of the codebase to understand this integration:
+
+1. Architecture: What role does this service play in the system? Why was it chosen? What would break without it?
+
+2. Key Components: What internal code manages the integration?
+   - Client libraries or wrapper modules (e.g., `libs/gcp/`, `src/billing/stripe/`)
+   - Configuration structs and environment variables
+   - Authentication mechanisms (API keys, OAuth2, signed requests, HMAC)
+   - Caching layers (in-memory, database-backed)
+
+3. System Flows: End-to-end flows showing how data moves through this external service.
+   - Include sequence diagrams if multiple internal components interact with it
+   - Document both the happy path and error/retry behavior
+
+4. External Dependencies: What libraries/SDKs are used to talk to this service?
+   - Library name, version, and specific features used
+
+5. API Surface: What specific endpoints, methods, or protocols does this codebase call?
+   - List every endpoint consumed with method, auth, and purpose
+   - Note any endpoints this service calls back into (webhooks, callbacks)
+
+6. Configuration: List all environment variables needed to configure this integration.
+
+7. Security Considerations: Authentication, credential handling, data sensitivity, failure modes.
+
+IMPORTANT formatting rules:
+- The file MUST start with:
+  ```
+  # {service_name} — Integration Analysis
+
+  **Classification**: external-service
+  **Application Type**: external-service
+  **Location**: External — {short description of where/what it is}
+  ```
+- Use `## Architecture`, `## Key Components`, `## System Flows`, `## External Dependencies`, `## API Surface`, `## Configuration`, `## Security Considerations` as top-level sections
+- This mirrors the application analysis format so the website renders it identically
+
+Save your analysis to:
+- /tmp/{SERVICE_NAME}/service_analyses/{service_slug}.md
