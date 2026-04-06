@@ -44,11 +44,24 @@
         - Analyzes executable systems with business logic
         - Documents system flows and request/response patterns
         - Identifies application-to-application interactions (HTTP, shared DB, message queues)
-        - Maps external dependencies
+        - Maps ALL external library dependencies with version, category, and purpose
+        - Documents external system integrations (databases, cloud services, APIs)
         - Documents how applications use internal libraries
       </responsibilities>
       <tools>Glob, Grep, Read, Bash, Write</tools>
       <output>files/service_analyses/{application_name}.md</output>
+    </component>
+
+    <component name="external-service-analyzer">
+      <role>Deep analysis of external service integrations</role>
+      <responsibilities>
+        - Analyzes how a specific external service (e.g., AWS S3, PostgreSQL, Stripe) is integrated
+        - Documents client libraries, wrapper modules, and authentication mechanisms
+        - Maps API endpoints consumed and webhooks received
+        - Documents configuration, environment variables, and security considerations
+      </responsibilities>
+      <tools>Glob, Grep, Read, Bash, Write</tools>
+      <output>files/service_analyses/{service_slug}.md</output>
     </component>
 
   </architecture>
@@ -185,11 +198,21 @@
       Analyze dependent libraries in topological order, passing upstream context
     </step>
 
-    <step number="4" name="application-analysis-and-synthesis">
+    <step number="4" name="application-analysis">
       - Spawn all application analyzers in parallel
       - Lead agent polls transcript for [APPLICATION_ANALYSIS_COMPLETE] markers
       - Lead agent incrementally processes completed analyses
-      - When [ALL_APPLICATION_ANALYSIS_COMPLETE] appears, lead agent synthesizes architecture docs
+    </step>
+
+    <step number="5" name="external-service-analysis">
+      - Collect external services discovered across all application analyses
+      - Spawn external-service-analyzer for each significant runtime integration
+      - Produces dedicated integration analysis files
+    </step>
+
+    <step number="6" name="architecture-synthesis">
+      - Spawn architecture-documenter to synthesize comprehensive documentation
+      - Aggregates all external dependencies into complete technology inventory
     </step>
 
   </workflow_steps>

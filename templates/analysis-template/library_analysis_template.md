@@ -232,13 +232,22 @@ When creating diagrams for library data flows:
 
 ### External Libraries
 
-- **[package-name]** ([VERSION]): [One-sentence description of what the package does]. [2-3 sentences describing key features, APIs, or capabilities provided]. [How this library uses it - specific functions, patterns, or integration points]. [Any notable configuration or usage details.]
+For EACH third-party dependency from the manifest file, document with this format:
 
-- **[package-name]** ([VERSION]): [Description and usage details]
+- **[package-name]** ([VERSION]) [[CATEGORY]]: [One-sentence description of what the package does].
+  [2-3 sentences describing key features, APIs, or capabilities provided].
+  [How this library uses it - specific functions, patterns, or integration points].
+  Imported in: `[list of source files that import/use this package]`.
 
-- **[package-name]** ([VERSION]): [Description and usage details]
+- **[package-name]** ([VERSION]) [[CATEGORY]]: [Description and usage details].
+  Imported in: `[source files]`.
 
-[List all major external dependencies. Focus on direct dependencies that are critical to functionality.]
+Categories: web-framework, database, serialization, async-runtime, crypto, networking, logging,
+testing, cli, build-tool, cloud-sdk, blockchain, monitoring, other.
+
+[List ALL external dependencies from the manifest — not just the "major" ones. Every dependency
+should be documented with version, category, purpose, and which files import it.
+Separate runtime dependencies from dev/test dependencies if applicable.]
 
 ### Internal Libraries
 

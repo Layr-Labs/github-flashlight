@@ -66,6 +66,9 @@ async def chat():
     architecture_documenter_prompt = load_prompt(
         "subagents/architecture_documenter.txt"
     )
+    external_service_analyzer_prompt = load_prompt(
+        "subagents/external_service_analyzer.txt"
+    )
     # Load analysis templates and enhance code analyzer prompt
     templates_dir = Path(__file__).parent.parent / "templates" / "analysis-template"
     template_loader = TemplateLoader(templates_dir)
@@ -131,6 +134,17 @@ async def chat():
             tools=["Glob", "Read", "Write"],
             prompt=architecture_documenter_prompt,
             model="sonnet",  # Use sonnet for comprehensive synthesis
+        ),
+        "external-service-analyzer": AgentDefinition(
+            description=(
+                "Use this agent to analyze how a specific external service (e.g., AWS S3, PostgreSQL, "
+                "Stripe, Ethereum RPC) is integrated into the codebase. Produces a dedicated analysis "
+                "file documenting the integration architecture, client libraries, API surface, "
+                "configuration, and security considerations. Spawn one instance per external service."
+            ),
+            tools=["Glob", "Grep", "Read", "Bash", "Write"],
+            prompt=external_service_analyzer_prompt,
+            model="sonnet",  # Use sonnet for integration analysis
         ),
     }
 

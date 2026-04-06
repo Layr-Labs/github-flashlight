@@ -2,7 +2,7 @@
 
 from typing import List, Tuple, Dict
 from pathlib import Path
-from agent.schemas.core import Library, Application
+from agent.schemas.core import Library, Application, ExternalDependency
 from agent.schemas.dependency_graph import DependencyGraph
 
 
@@ -23,7 +23,7 @@ class DependencyGraphBuilder:
 
         # Add edges for internal library dependencies
         for lib_name, lib in self.services.items():
-            for dep in lib.dependencies:
+            for dep in lib.internal_dependencies:
                 # Only add edge if dependency is an internal library
                 if dep in self.services:
                     self.graph.add_edge(lib_name, dep)
@@ -45,7 +45,7 @@ class DependencyGraphBuilder:
         """Save markdown visualization of the library graph."""
         phase1, phase2 = self.get_analysis_order()
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             f.write("# Library Dependency Graph\n\n")
             f.write("## Phase 1: Foundation Libraries (No Dependencies)\n\n")
             if phase1:
@@ -58,7 +58,16 @@ class DependencyGraphBuilder:
                         f.write(f"- **Description**: {lib.description}\n")
                     f.write(f"- **Dependencies**: None\n")
                     if lib.external_dependencies:
-                        ext = ', '.join(f"`{d}`" for d in lib.external_dependencies[:5])
+                        ext_parts = []
+                        for d in lib.external_dependencies[:5]:
+                            if isinstance(d, ExternalDependency):
+                                label = f"`{d.name}`"
+                                if d.version:
+                                    label += f" ({d.version})"
+                            else:
+                                label = f"`{d}`"
+                            ext_parts.append(label)
+                        ext = ", ".join(ext_parts)
                         if len(lib.external_dependencies) > 5:
                             ext += f" (+{len(lib.external_dependencies) - 5} more)"
                         f.write(f"- **External Dependencies**: {ext}\n")
@@ -77,10 +86,19 @@ class DependencyGraphBuilder:
                     if lib.description:
                         f.write(f"- **Description**: {lib.description}\n")
                     if deps:
-                        dep_list = ', '.join(f"`{d}`" for d in deps)
+                        dep_list = ", ".join(f"`{d}`" for d in deps)
                         f.write(f"- **Depends On**: {dep_list}\n")
                     if lib.external_dependencies:
-                        ext = ', '.join(f"`{d}`" for d in lib.external_dependencies[:5])
+                        ext_parts = []
+                        for d in lib.external_dependencies[:5]:
+                            if isinstance(d, ExternalDependency):
+                                label = f"`{d.name}`"
+                                if d.version:
+                                    label += f" ({d.version})"
+                            else:
+                                label = f"`{d}`"
+                            ext_parts.append(label)
+                        ext = ", ".join(ext_parts)
                         if len(lib.external_dependencies) > 5:
                             ext += f" (+{len(lib.external_dependencies) - 5} more)"
                         f.write(f"- **External Dependencies**: {ext}\n")

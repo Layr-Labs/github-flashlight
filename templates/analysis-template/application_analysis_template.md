@@ -184,25 +184,31 @@ When creating sequence diagrams:
 
 ## Dependencies
 
-### External Applications
+### External Libraries
 
-- **[package-name]** ([VERSION]): [One-sentence description of what the package does]. [2-3 sentences describing key features, APIs, or capabilities provided]. [How this application uses it - specific functions, patterns, or integration points]. [Any notable configuration or usage details like performance characteristics, feature flags, etc.]
+For EACH third-party package dependency from the manifest file, document with this format:
 
-- **[package-name]** ([VERSION]): [Description and usage details]
+- **[package-name]** ([VERSION]) [[CATEGORY]]: [One-sentence description of what the package does].
+  [2-3 sentences describing how this application uses it - specific functions, patterns, or integration points].
+  Imported in: `[list of source files that import/use this package]`.
 
-- **[package-name]** ([VERSION]): [Description and usage details]
+- **[package-name]** ([VERSION]) [[CATEGORY]]: [Description and usage details].
+  Imported in: `[source files]`.
 
-[List all major external applications - typically 5-15 packages depending on application complexity. Focus on direct applications that are critical to functionality.]
+Categories: web-framework, database, serialization, async-runtime, crypto, networking, logging,
+testing, cli, build-tool, cloud-sdk, blockchain, monitoring, other.
 
-### Internal Aplications
+[List ALL external library/package dependencies from the manifest. Every dependency should be
+documented with version, category, purpose, and which files import it.
+Separate runtime dependencies from dev/test dependencies if applicable.]
 
-- **[internal-module-name]** (`[relative/path]`): [One-sentence description of what this internal dependency provides]. [2-3 sentences describing what is imported from it, how it's used, and why this dependency exists. Include specific types, functions, or configurations imported.]
+### Internal Libraries
 
-- **[internal-module-name]** (`[relative/path]`): [Description and usage details]
+- **[internal-library-name]** (`[relative/path]`): [One-sentence description of what this internal library provides]. [2-3 sentences describing what is imported from it, how it's used, and why this dependency exists. Include specific types, functions, or configurations imported.]
 
-- **[internal-module-name]** (`[relative/path]`): [Description and usage details]
+- **[internal-library-name]** (`[relative/path]`): [Description and usage details]
 
-[List all internal dependencies on other applications or shared modules within the same codebase. These represent architectural relationships between different parts of the system.]
+[List all internal dependencies on libraries within the same codebase. These represent architectural relationships between the application and the libraries it composes.]
 
 ## API Surface
 

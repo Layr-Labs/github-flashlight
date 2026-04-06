@@ -79,7 +79,7 @@ Glob: Find files matching patterns
 Read: Read file contents
 Bash: Execute shell commands (ls, find, grep - read-only operations only)
 Write: Save discovery outputs and graphs
-Task: Spawn code-library-analyzer, application-analyzer, or architecture-documenter subagents
+Task: Spawn code-library-analyzer, application-analyzer, external-service-analyzer, or architecture-documenter subagents
 </available_tools>
 
 <workflow>
@@ -178,18 +178,50 @@ Step 1.3: Create Library Inventory (Phase 1 Only)
         "root_path": "string",
         "description": "string",
         "internal_dependencies": ["other internal libraries"],
-        "external_dependencies": ["third-party packages"],
+        "external_dependencies": [
+          {
+            "name": "package-name",
+            "version": "version constraint from manifest",
+            "category": "web-framework | database | serialization | async-runtime | crypto | networking | logging | testing | build-tool | cli | other",
+            "purpose": "Brief description of what this dependency provides to this library"
+          }
+        ],
         "key_files": ["important source files"]
       }
     ]
   }
+
+**CRITICAL: Extracting External Dependencies**
+When reading manifest files (Cargo.toml, package.json, pyproject.toml), extract ALL third-party
+dependencies as structured objects — not bare strings. For each dependency:
+1. **name**: The package name exactly as it appears in the manifest
+2. **version**: The version constraint (e.g., "1.35", "^4.18.0", ">=3.0")
+3. **category**: Classify by purpose using these categories:
+   - `web-framework`: HTTP servers, routers (actix-web, axum, express, flask, fastapi)
+   - `database`: Database drivers/ORMs (sqlx, diesel, prisma, sqlalchemy, mongoose)
+   - `serialization`: Encoding/decoding (serde, prost, json, pydantic, protobuf)
+   - `async-runtime`: Async execution (tokio, async-std, asyncio, gevent)
+   - `crypto`: Cryptography, hashing (ring, openssl, bcrypt, jsonwebtoken)
+   - `networking`: HTTP clients, gRPC, websockets (reqwest, hyper, grpc, axios)
+   - `logging`: Logging/tracing (tracing, log4rs, winston, structlog)
+   - `testing`: Test frameworks (criterion, proptest, jest, pytest)
+   - `cli`: Command-line parsing (clap, structopt, commander, click)
+   - `build-tool`: Build/codegen (tonic-build, prost-build, webpack)
+   - `cloud-sdk`: Cloud provider SDKs (aws-sdk, google-cloud, azure)
+   - `blockchain`: Chain interaction (ethers, web3, solana-sdk)
+   - `monitoring`: Metrics/observability (prometheus, datadog, sentry)
+   - `other`: Anything that doesn't fit the above
+4. **purpose**: One sentence explaining what this package provides to the component
+
+This structured data is essential for downstream architecture synthesis and technology inventory.
+
 - Also Write human-readable summary to /tmp/{SERVICE_NAME}/service_discovery/library_discovery.md
 - Note: Applications discovered later in Phase 2
 
 **PHASE 2: LIBRARY GRAPH & ANALYSIS**
 
 Step 2.1: Build Library Dependency Graph
-- Use Bash to run: python scripts/build_dependency_graph.py /tmp/{SERVICE_NAME}/service_discovery/libraries.json /tmp/{SERVICE_NAME}/dependency_graphs
+- Use Bash to run: python scripts/build_dependency_graph.py /tmp/{SERVICE_NAME}/service_discovery /tmp/{SERVICE_NAME}/dependency_graphs
 - This script uses graph utilities (DependencyGraph, DependencyGraphBuilder) to:
   * Build library dependency graph with topological sort (Kahn's algorithm)
   * Compute analysis order by depth (depth 0 = no dependencies, depth 1+= increasing dependencies)
@@ -274,11 +306,20 @@ Step 3.2: Create Application Inventory
         "description": "string",
         "entrypoint_type": "cli" | "http-server" | "daemon" | "worker",
         "libraries_used": ["internal library names from library graph"],
-        "external_dependencies": ["third-party packages"],
+        "external_dependencies": [
+          {
+            "name": "package-name",
+            "version": "version constraint",
+            "category": "category from the list above",
+            "purpose": "Brief description of what this dependency provides"
+          }
+        ],
         "key_files": ["entrypoint files"]
       }
     ]
   }
+
+Use the same structured external_dependencies format as libraries (see Step 1.3).
 - Also Write to /tmp/{SERVICE_NAME}/service_discovery/application_discovery.md
 
 Step 3.3: Initialize Application Interaction Graph
@@ -312,11 +353,40 @@ Step 4.3: Update Application Interaction Graph
 - Edges represent: HTTP API calls, message queues, shared databases, gRPC, etc.
 - Use Write to save updated application graph
 
-**PHASE 5: ARCHITECTURE DOCUMENTATION SYNTHESIS**
+**PHASE 5: EXTERNAL SERVICE DEEP-DIVE** (optional but recommended)
 
-Step 5.1: Spawn Architecture Documenter
+After all application analyses complete, check whether any applications reported significant
+external system integrations (in their "External Systems" sections). If so:
 
-After all application analyses complete:
+Step 5.1: Collect External Services
+- Read all application analysis files from /tmp/{SERVICE_NAME}/service_analyses/
+- Extract the "External Systems" sections
+- Build a deduplicated list of external services across all applications
+- For each external service, note which applications use it
+
+Step 5.2: Spawn External Service Analyzers
+For each significant external service (databases, cloud platforms, blockchain RPCs, payment APIs, etc.):
+- Spawn external-service-analyzer subagent with Task tool
+- subagent_type: "external-service-analyzer"
+- description: "Analyze {service_name} integration"
+- prompt: Load from agent/prompts/subagents/external_service_analyzer.txt and substitute:
+  * {service_name}: The external service name (e.g., "PostgreSQL", "AWS S3", "Ethereum RPC")
+  * {service_slug}: Lowercase slug for filename (e.g., "postgresql", "aws-s3", "ethereum-rpc")
+  * {service_category}: Category (database, object-storage, blockchain, etc.)
+  * {service_description}: Brief description of the service
+  * {known_users}: Comma-separated list of applications that use this service
+  * {project_name}: The SERVICE_NAME being analyzed
+- All external service analyzers can run in parallel
+- Each produces /tmp/{SERVICE_NAME}/service_analyses/{service_slug}.md
+
+Skip this phase if there are fewer than 2 significant external services, or if the
+codebase is simple enough that application analyses already cover the integrations adequately.
+
+**PHASE 6: ARCHITECTURE DOCUMENTATION SYNTHESIS**
+
+Step 6.1: Spawn Architecture Documenter
+
+After all analyses (application + external service) complete:
 
 Use the Task tool to spawn architecture-documenter subagent:
 - subagent_type: "architecture-documenter"
@@ -324,13 +394,14 @@ Use the Task tool to spawn architecture-documenter subagent:
 - prompt: Instruct to read analyses, update graphs, enrich third-party integrations, create documentation
 
 The architecture-documenter will:
-1. Read all application analyses from /tmp/{SERVICE_NAME}/service_analyses/
+1. Read all analyses from /tmp/{SERVICE_NAME}/service_analyses/ (libraries, applications, AND external services)
 2. Extract application_interactions (internal, external) and update /tmp/{SERVICE_NAME}/dependency_graphs/application_graph.json with edges
-4. Read library analyses and both dependency graphs
+3. Read library analyses and both dependency graphs
+4. Aggregate all external dependencies into a comprehensive technology inventory
 5. Use templates to synthesize comprehensive architecture documentation
 6. Write /tmp/{SERVICE_NAME}/architecture_docs/architecture.md and quick_reference.md
 
-Step 5.2: Confirm Completion
+Step 6.2: Confirm Completion
 - Tell user analysis is complete
 - Report: "Documentation: /tmp/{SERVICE_NAME}/architecture_docs/architecture.md"
 </workflow>
@@ -340,6 +411,7 @@ Subagent prompts are stored in separate files under agent/prompts/subagents/:
 - code_analyzer_library_depth0.txt - For libraries with no internal dependencies
 - code_analyzer_library.txt - For libraries with internal dependencies
 - application_analyzer.txt - For applications
+- external_service_analyzer.txt - For external service integration analysis
 
 Documentation templates are stored in templates/:
 - architecture_template.md - Structure for comprehensive architecture documentation
@@ -365,11 +437,19 @@ description: "Analyze {library_name}"
 prompt: [Load from agent/prompts/subagents/code_analyzer_library.txt and substitute placeholders]
 ```
 
-When spawning code-library-analyzer for Application:
+When spawning application-analyzer for Application:
 ```
-subagent_type: "code-library-analyzer"
+subagent_type: "application-analyzer"
 description: "Analyze {application_name}"
 prompt: [Load from agent/prompts/subagents/application_analyzer.txt and substitute placeholders]
+```
+
+When spawning external-service-analyzer:
+```
+subagent_type: "external-service-analyzer"
+description: "Analyze {service_name} integration"
+prompt: [Load from agent/prompts/subagents/external_service_analyzer.txt and substitute placeholders:
+  {service_name}, {service_slug}, {service_category}, {service_description}, {known_users}, {project_name}]
 ```
 
 </task_tool_usage>
@@ -416,7 +496,11 @@ Classification:
 - Type: APPLICATION (has [[bin]] or src/main.rs)
 - Name: "auth-service"
 - Libraries Used: ["common-utils", "database-models"]
-- External Deps: ["serde", "tokio"]
+- External Dependencies:
+  [
+    {"name": "serde", "version": "1.0", "category": "serialization", "purpose": "Serialize/deserialize data structures"},
+    {"name": "tokio", "version": "1.35", "category": "async-runtime", "purpose": "Async runtime for concurrent I/O"}
+  ]
 
 Example Cargo.toml (Library):
 ```toml
@@ -431,8 +515,9 @@ serde = "1.0"  ← EXTERNAL
 Classification:
 - Type: LIBRARY (no [[bin]], no src/main.rs, only src/lib.rs)
 - Name: "common-utils"
-- Library Dependencies: [] (no internal library dependencies)
-- External Deps: ["serde"]
+- Internal Dependencies: [] (no internal library dependencies)
+- External Dependencies:
+  [{"name": "serde", "version": "1.0", "category": "serialization", "purpose": "Serialize/deserialize data structures"}]
 
 **Bash Commands for Discovery:**
 ```bash

@@ -16,11 +16,49 @@ Perform deep analysis while respecting the output structure of `templates/analys
 1. Architecture: Overall design patterns and structure
 2. Key Components: Major modules, structs, classes, functions
 3. Data Flows: Important data paths and control flows
-4. External Library Dependencies: Third-party libraries used
+4. External Library Dependencies (CRITICAL — see detailed instructions below)
 5. Internal Library Dependencies: HOW this library uses its direct library dependencies (provided via {upstream_context})
 6. API Surface: Public interfaces exposed to other libraries/applications
 
 Focus on understanding how this library integrates with its direct dependencies.
+
+**EXTERNAL DEPENDENCY ANALYSIS — REQUIRED**
+
+You MUST thoroughly document ALL third-party dependencies. This is one of the most important
+parts of the analysis. Do NOT skip or summarize this section.
+
+Steps:
+1. Read the manifest file (Cargo.toml, package.json, pyproject.toml, go.mod) to get the
+   complete list of third-party dependencies with their version constraints.
+2. For EACH external dependency, document:
+   - **Name**: Exact package name
+   - **Version**: Version constraint from the manifest
+   - **Category**: Classify as one of: web-framework, database, serialization, async-runtime,
+     crypto, networking, logging, testing, cli, build-tool, cloud-sdk, blockchain, monitoring, other
+   - **Purpose**: 1-2 sentences on what this package provides and HOW this library uses it
+   - **Integration points**: Which modules/files import or use this dependency
+3. Use Grep to find actual usage patterns: `grep -rn "use.*{dep_name}\|import.*{dep_name}\|require.*{dep_name}" src/`
+4. Distinguish between:
+   - **Runtime dependencies**: Used in production code (src/)
+   - **Dev dependencies**: Used only for testing/building (tests/, build scripts)
+
+Format in the markdown output as:
+
+```
+## Library Dependencies
+
+### External Libraries
+
+- **serde** (1.0) [serialization]: Provides derive macros for serializing/deserializing
+  data structures. Used across all public types via `#[derive(Serialize, Deserialize)]`.
+  Imported in: `src/types.rs`, `src/config.rs`.
+
+- **tokio** (1.35) [async-runtime]: Async runtime powering all I/O operations.
+  Used for TCP listeners, timers, and spawning background tasks.
+  Imported in: `src/server.rs`, `src/worker.rs`.
+```
+
+Do NOT output bare dependency names without version, category, and usage details.
 
 Save your analysis to:
 - /tmp/{SERVICE_NAME}/service_analyses/{library_name}.md (human-readable and adherent to library_analysis_template.md)

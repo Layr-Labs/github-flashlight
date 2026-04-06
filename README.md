@@ -41,22 +41,30 @@ Displayed as **circles (●)** in the dependency graph.
 
 ## Architecture
 
-The pipeline uses three specialized roles:
+The pipeline uses four specialized roles:
 
 1. **Primary Leader** (orchestrator)
    - Discovers services by scanning for manifest files
    - Builds dependency graph and determines analysis order
    - Spawns code analyzer agents with appropriate context
+   - Spawns external service analyzers for runtime integrations
    - Spawns architecture documenter for final synthesis
 
 2. **Code Analyzer** (multiple instances)
    - Deep analysis of individual services
    - Examines architecture, components, data flows, dependencies, API surface
+   - Documents all third-party dependencies with version, category, and purpose
    - Receives context from direct dependencies
-   - Outputs JSON and Markdown reports
+   - Outputs Markdown reports
 
-3. **Architecture Documenter** (single instance)
+3. **External Service Analyzer** (per-service instances)
+   - Deep-dives into how external services (databases, cloud platforms, APIs) are integrated
+   - Documents client libraries, authentication, API surface, and configuration
+   - Produces integration analysis files for architecture synthesis
+
+4. **Architecture Documenter** (single instance)
    - Synthesizes all service analyses
+   - Aggregates external dependencies into a complete technology inventory
    - Identifies system-wide patterns
    - Creates comprehensive architecture documentation
 

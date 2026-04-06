@@ -95,16 +95,18 @@ List major components with brief descriptions of their responsibilities.
 - Note error handling patterns and how errors propagate
 - Document 3-5 major flows through the service
 
-**STEP 5: EXAMINE EXTERNAL DEPENDENCIES**
-- Read manifest file (Cargo.toml, package.json, requirements.txt)
-- List third-party libraries used
-- For each major dependency, note its purpose:
-  * Web framework (actix-web, express, flask)
-  * Database (postgres, mongodb)
-  * Serialization (serde, json, pydantic)
-  * Async runtime (tokio, asyncio)
-  * Logging/monitoring
-  * Testing frameworks
+**STEP 5: EXAMINE EXTERNAL DEPENDENCIES (CRITICAL)**
+- Read manifest file (Cargo.toml, package.json, pyproject.toml, go.mod)
+- Extract ALL third-party dependencies with version constraints
+- For EACH dependency, document:
+  * **Name**: Exact package name from manifest
+  * **Version**: Version constraint (e.g., "1.35", "^4.18.0")
+  * **Category**: Classify using: web-framework, database, serialization, async-runtime,
+    crypto, networking, logging, testing, cli, build-tool, cloud-sdk, blockchain, monitoring, other
+  * **Purpose**: 1-2 sentences on what the package provides and how this component uses it
+  * **Integration points**: Use Grep to find actual imports/usage in source files
+- Distinguish runtime dependencies from dev/test dependencies
+- Do NOT output bare dependency names — each must have version, category, and purpose
 
 **STEP 6: ANALYZE INTERNAL DEPENDENCIES**
 

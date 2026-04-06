@@ -3,14 +3,14 @@
 Build dependency graphs using existing graph utilities.
 
 This script:
-1. Reads component discovery data (components.json)
+1. Reads component discovery data (libraries.json and applications.json)
 2. Builds library and application graphs using existing DependencyGraphBuilder
 3. Performs topological sort for library analysis order
 4. Outputs library_graph.json and application_graph.json
 
 Usage:
-    python scripts/build_dependency_graph.py <components_file> <output_dir>
-    python scripts/build_dependency_graph.py files/service_discovery/components.json files/dependency_graphs
+    python scripts/build_dependency_graph.py <discovery_dir> <output_dir>
+    python scripts/build_dependency_graph.py /tmp/my-service/service_discovery /tmp/my-service/dependency_graphs
 """
 
 import argparse
@@ -21,48 +21,114 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from agent.schemas.service import Library, Application
+from agent.schemas.core import Library, Application, ExternalDependency
 from agent.utils.dependency_graph import DependencyGraphBuilder
 
 
-def load_components(components_file: Path) -> tuple[list[Library], list[Application]]:
+def load_components(discovery_dir: Path) -> tuple[list[Library], list[Application]]:
     """
-    Load components and convert to Service objects.
+    Load components from discovery directory.
+
+    Reads libraries.json and applications.json from the discovery directory.
 
     Returns:
-        Tuple of (libraries, applications) as Service objects
+        Tuple of (libraries, applications) as typed objects
     """
-    with open(components_file) as f:
-        data = json.load(f)
-
     libraries = []
-    for lib in data.get('libraries', []):
-        # Create Library objects
-        libraries.append(Library(
-            name=lib['name'],
-            type=lib.get('type', 'unknown'),
-            root_path=Path(lib.get('root_path', lib['name'])),
-            description=lib.get('description', ''),
-            manifest_path=Path(lib['manifest_path']) if lib.get('manifest_path') else None,
-            dependencies=lib.get('dependencies', []),  # Other internal libraries
-            external_dependencies=lib.get('external_dependencies', []),  # Third-party packages
-            key_files=[Path(f) for f in lib.get('key_files', [])]
-        ))
-
     applications = []
-    for app in data.get('applications', []):
-        # Create Application objects with new dependency fields
-        applications.append(Application(
-            name=app['name'],
-            type=app.get('type', 'unknown'),
-            root_path=Path(app.get('root_path', app['name'])),
-            description=app.get('description', ''),
-            manifest_path=Path(app['manifest_path']) if app.get('manifest_path') else None,
-            external_dependencies=app.get('external_dependencies', []),  # Third-party apps
-            libraries_used=app.get('libraries_used', []),  # Internal libraries
-            internal_dependencies=app.get('internal_dependencies', []),  # Apps this one calls
-            key_files=[Path(f) for f in app.get('key_files', [])]
-        ))
+
+    # Load libraries
+    libraries_file = discovery_dir / "libraries.json"
+    if libraries_file.exists():
+        with open(libraries_file) as f:
+            data = json.load(f)
+        for lib in data.get("libraries", []):
+            libraries.append(
+                Library(
+                    name=lib["name"],
+                    type=lib.get("type", "unknown"),
+                    root_path=Path(lib.get("root_path", lib["name"])),
+                    description=lib.get("description", ""),
+                    manifest_path=Path(lib["manifest_path"])
+                    if lib.get("manifest_path")
+                    else None,
+                    internal_dependencies=lib.get("internal_dependencies", []),
+                    external_dependencies=[
+                        ExternalDependency.from_dict(d)
+                        for d in lib.get("external_dependencies", [])
+                    ],
+                    key_files=[Path(f) for f in lib.get("key_files", [])],
+                )
+            )
+
+    # Load applications
+    applications_file = discovery_dir / "applications.json"
+    if applications_file.exists():
+        with open(applications_file) as f:
+            data = json.load(f)
+        for app in data.get("applications", []):
+            applications.append(
+                Application(
+                    name=app["name"],
+                    type=app.get("type", "unknown"),
+                    root_path=Path(app.get("root_path", app["name"])),
+                    description=app.get("description", ""),
+                    manifest_path=Path(app["manifest_path"])
+                    if app.get("manifest_path")
+                    else None,
+                    external_dependencies=[
+                        ExternalDependency.from_dict(d)
+                        for d in app.get("external_dependencies", [])
+                    ],
+                    libraries_used=app.get("libraries_used", []),
+                    internal_applications=app.get("internal_applications", []),
+                    key_files=[Path(f) for f in app.get("key_files", [])],
+                )
+            )
+
+    # Fallback: try loading from a single components.json for backward compatibility
+    if not libraries and not applications:
+        components_file = discovery_dir / "components.json"
+        if components_file.exists():
+            with open(components_file) as f:
+                data = json.load(f)
+            for lib in data.get("libraries", []):
+                libraries.append(
+                    Library(
+                        name=lib["name"],
+                        type=lib.get("type", "unknown"),
+                        root_path=Path(lib.get("root_path", lib["name"])),
+                        description=lib.get("description", ""),
+                        manifest_path=Path(lib["manifest_path"])
+                        if lib.get("manifest_path")
+                        else None,
+                        internal_dependencies=lib.get("internal_dependencies", []),
+                        external_dependencies=[
+                            ExternalDependency.from_dict(d)
+                            for d in lib.get("external_dependencies", [])
+                        ],
+                        key_files=[Path(f) for f in lib.get("key_files", [])],
+                    )
+                )
+            for app in data.get("applications", []):
+                applications.append(
+                    Application(
+                        name=app["name"],
+                        type=app.get("type", "unknown"),
+                        root_path=Path(app.get("root_path", app["name"])),
+                        description=app.get("description", ""),
+                        manifest_path=Path(app["manifest_path"])
+                        if app.get("manifest_path")
+                        else None,
+                        external_dependencies=[
+                            ExternalDependency.from_dict(d)
+                            for d in app.get("external_dependencies", [])
+                        ],
+                        libraries_used=app.get("libraries_used", []),
+                        internal_applications=app.get("internal_applications", []),
+                        key_files=[Path(f) for f in app.get("key_files", [])],
+                    )
+                )
 
     return libraries, applications
 
@@ -78,6 +144,7 @@ def build_library_graph_json(builder: DependencyGraphBuilder) -> dict:
         "id": "library-name",
         "type": "rust-crate" | "nodejs-package" | "python-package",
         "classification": "library",
+        "external_dependencies": [{"name": "...", "version": "...", "category": "...", "purpose": "..."}],
         "phase": 1 | 2
       }],
       "edges": [{"from": "library-a", "to": "library-b"}],
@@ -94,34 +161,44 @@ def build_library_graph_json(builder: DependencyGraphBuilder) -> dict:
     nodes = []
     for lib_name in graph.nodes:
         service = builder.services[lib_name]
-        nodes.append({
-            'id': lib_name,
-            'type': service.type,
-            'classification': 'library',
-            'phase': 1 if lib_name in phase1 else 2
-        })
+        node = {
+            "id": lib_name,
+            "type": service.type,
+            "classification": "library",
+            "phase": 1 if lib_name in phase1 else 2,
+        }
+        if service.external_dependencies:
+            node["external_dependencies"] = [
+                d.to_dict() if isinstance(d, ExternalDependency) else d
+                for d in service.external_dependencies
+            ]
+        nodes.append(node)
 
     # Build edges (from -> to where 'from' depends on 'to')
     edges = []
     for from_node, to_nodes in graph.edges.items():
         for to_node in to_nodes:
-            edges.append({
-                'from': from_node,
-                'to': to_node
-            })
+            edges.append(
+                {
+                    "from": from_node,
+                    "to": to_node,
+                }
+            )
 
     return {
-        'graph_type': 'library_dependencies',
-        'nodes': nodes,
-        'edges': edges,
-        'analysis_order': {
-            'phase1': phase1,
-            'phase2': phase2
-        }
+        "graph_type": "library_dependencies",
+        "nodes": nodes,
+        "edges": edges,
+        "analysis_order": {
+            "phase1": phase1,
+            "phase2": phase2,
+        },
     }
 
 
-def build_application_graph_json(applications: list[Application], libraries: list[Library]) -> dict:
+def build_application_graph_json(
+    applications: list[Application], libraries: list[Library]
+) -> dict:
     """
     Build initial application_graph.json (nodes only, edges added during analysis).
 
@@ -133,9 +210,8 @@ def build_application_graph_json(applications: list[Application], libraries: lis
         "type": "rust-crate" | "nodejs-package" | "python-package",
         "classification": "application",
         "libraries_used": ["internal library names"],
-        "external_dependencies": ["third-party apps that interact with application"],
-        "caller_dependencies": ["application components that call this one"],
-        "callee_dependencies": ["application components this one calls"],
+        "external_dependencies": [{"name": "...", "version": "...", "category": "...", "purpose": "..."}],
+        "internal_applications": ["other apps this one calls"],
         "key_files": ["important source files"]
       }],
       "edges": [
@@ -159,20 +235,25 @@ def build_application_graph_json(applications: list[Application], libraries: lis
         # Filter libraries_used to only include actual internal libraries
         libraries_used = [dep for dep in app.libraries_used if dep in library_names]
 
-        nodes.append({
-            'id': app.name,
-            'type': app.type,
-            'classification': 'application',
-            'libraries_used': libraries_used,
-            'external_dependencies': app.external_dependencies,  # Third-party apps
-            'internal_dependencies': app.internal_dependencies,  # Apps this one calls
-            'key_files': [str(f) for f in app.key_files]
-        })
+        nodes.append(
+            {
+                "id": app.name,
+                "type": app.type,
+                "classification": "application",
+                "libraries_used": libraries_used,
+                "external_dependencies": [
+                    d.to_dict() if isinstance(d, ExternalDependency) else d
+                    for d in app.external_dependencies
+                ],
+                "internal_applications": app.internal_applications,
+                "key_files": [str(f) for f in app.key_files],
+            }
+        )
 
     return {
-        'graph_type': 'application_interactions',
-        'nodes': nodes,
-        'edges': []  # Edges discovered and added during application analysis
+        "graph_type": "application_interactions",
+        "nodes": nodes,
+        "edges": [],  # Edges discovered and added during application analysis
     }
 
 
@@ -181,26 +262,26 @@ def main():
         description="Build dependency graphs and compute analysis order"
     )
     parser.add_argument(
-        "components_file",
-        help="Path to components.json file"
+        "discovery_dir",
+        help="Path to service_discovery directory (containing libraries.json and applications.json)",
     )
     parser.add_argument(
         "output_dir",
-        help="Directory to write graph outputs"
+        help="Directory to write graph outputs",
     )
 
     args = parser.parse_args()
 
-    components_file = Path(args.components_file)
+    discovery_dir = Path(args.discovery_dir)
     output_dir = Path(args.output_dir)
 
-    if not components_file.exists():
-        print(f"Error: Components file not found: {components_file}", file=sys.stderr)
+    if not discovery_dir.exists():
+        print(f"Error: Discovery directory not found: {discovery_dir}", file=sys.stderr)
         sys.exit(1)
 
     # Load components
-    print(f"Loading components from {components_file}...")
-    libraries, applications = load_components(components_file)
+    print(f"Loading components from {discovery_dir}...")
+    libraries, applications = load_components(discovery_dir)
 
     print(f"Found {len(libraries)} libraries and {len(applications)} applications")
 
@@ -222,13 +303,13 @@ def main():
 
     # Write library graph
     lib_graph_path = output_dir / "library_graph.json"
-    with open(lib_graph_path, 'w') as f:
+    with open(lib_graph_path, "w") as f:
         json.dump(library_graph_json, f, indent=2)
     print(f"\n✓ Wrote {lib_graph_path}")
 
     # Write application graph
     app_graph_path = output_dir / "application_graph.json"
-    with open(app_graph_path, 'w') as f:
+    with open(app_graph_path, "w") as f:
         json.dump(application_graph_json, f, indent=2)
     print(f"✓ Wrote {app_graph_path}")
 
@@ -239,39 +320,51 @@ def main():
 
     # Simple application graph markdown
     app_md_path = output_dir / "application_graph.md"
-    with open(app_md_path, 'w') as f:
+    with open(app_md_path, "w") as f:
         f.write("# Application Interaction Graph\n\n")
         f.write("## Applications\n\n")
-        for node in application_graph_json['nodes']:
+        for node in application_graph_json["nodes"]:
             f.write(f"### `{node['id']}`\n\n")
             f.write(f"- **Type**: {node['type']}\n")
-            if node['libraries_used']:
-                libs = ', '.join(f"`{lib}`" for lib in node['libraries_used'])
+            if node["libraries_used"]:
+                libs = ", ".join(f"`{lib}`" for lib in node["libraries_used"])
                 f.write(f"- **Uses Libraries**: {libs}\n")
-            if node['external_dependencies']:
-                ext_deps = ', '.join(f"`{dep}`" for dep in node['external_dependencies'][:5])
-                if len(node['external_dependencies']) > 5:
-                    ext_deps += f" (+{len(node['external_dependencies']) - 5} more)"
-                f.write(f"- **External Dependencies**: {ext_deps}\n")
-            if node.get('caller_dependencies'):
-                callers = ', '.join(f"`{caller}`" for caller in node['caller_dependencies'])
-                f.write(f"- **Called By**: {callers}\n")
-            if node.get('callee_dependencies'):
-                callees = ', '.join(f"`{callee}`" for callee in node['callee_dependencies'])
-                f.write(f"- **Calls**: {callees}\n")
-            if node.get('key_files'):
-                files = ', '.join(f"`{kf}`" for kf in node['key_files'][:3])
-                if len(node['key_files']) > 3:
+            if node["external_dependencies"]:
+                ext_deps_display = []
+                for dep in node["external_dependencies"][:8]:
+                    if isinstance(dep, dict):
+                        name = dep.get("name", str(dep))
+                        version = dep.get("version", "")
+                        ext_deps_display.append(
+                            f"`{name}`" + (f" ({version})" if version else "")
+                        )
+                    else:
+                        ext_deps_display.append(f"`{dep}`")
+                ext_str = ", ".join(ext_deps_display)
+                remaining = len(node["external_dependencies"]) - 8
+                if remaining > 0:
+                    ext_str += f" (+{remaining} more)"
+                f.write(f"- **External Dependencies**: {ext_str}\n")
+            if node.get("internal_applications"):
+                apps = ", ".join(f"`{a}`" for a in node["internal_applications"])
+                f.write(f"- **Interacts With**: {apps}\n")
+            if node.get("key_files"):
+                files = ", ".join(f"`{kf}`" for kf in node["key_files"][:3])
+                if len(node["key_files"]) > 3:
                     files += f" (+{len(node['key_files']) - 3} more)"
                 f.write(f"- **Key Files**: {files}\n")
             f.write("\n")
         f.write("## Interactions\n\n")
-        if application_graph_json['edges']:
-            for edge in application_graph_json['edges']:
-                protocols = ', '.join(edge['communication_protocol']) if edge.get('communication_protocol') else 'Unknown'
+        if application_graph_json["edges"]:
+            for edge in application_graph_json["edges"]:
+                protocols = (
+                    ", ".join(edge["communication_protocol"])
+                    if edge.get("communication_protocol")
+                    else "Unknown"
+                )
                 f.write(f"- **`{edge['from']}`** → **`{edge['to']}`**\n")
                 f.write(f"  - **Protocol**: {protocols}\n")
-                if edge.get('description'):
+                if edge.get("description"):
                     f.write(f"  - **Description**: {edge['description']}\n")
                 f.write("\n")
         else:
@@ -283,7 +376,7 @@ def main():
     if phase2:
         print(f"  Phase 2 (sequential): {', '.join(phase2)}")
     else:
-        print(f"  Phase 2: none")
+        print("  Phase 2: none")
 
 
 if __name__ == "__main__":
