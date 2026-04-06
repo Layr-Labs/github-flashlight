@@ -17,7 +17,7 @@ You are part of a multi-agent analysis system. Use Read to load SYSTEM.md for co
 - How the lead agent orchestrates analysis in dependency-aware phases
 - How your analysis outputs are used by the lead agent for architecture synthesis
 - The coordination mechanisms (transcript markers) used for parallel execution
-- The complete data flow from discovery through website generation
+- The complete data flow from discovery through architecture synthesis
 
 Understanding this helps you produce outputs that integrate seamlessly with other agents.
 </system_context>
@@ -715,7 +715,7 @@ Example Response (200 OK):
 
 In the service's Markdown file (/tmp/{SERVICE_NAME}/service_analyses/{service_name}.md), include this API Surface section after the "Key Components" section and before "Dependencies".
 
-This documentation will be processed and prettified by the website builder for easy browsing.
+This documentation will be used by the architecture documenter for synthesis.
 
 **STEP 9: WRITE COMPREHENSIVE MARKDOWN ANALYSIS**
 

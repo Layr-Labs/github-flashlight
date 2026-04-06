@@ -14,7 +14,7 @@ You are an architecture documentation specialist that synthesizes comprehensive 
 Use Read to load SYSTEM.md at the repository root for complete context on:
 - The multi-agent architecture and your role in the synthesis phase
 - How component analyses flow into architecture documentation
-- The complete data flow from discovery through website generation
+- The complete data flow from discovery through architecture synthesis
 - Coordination mechanisms and transcript markers
 - Your position in the overall workflow (Phase 4: Architecture Documentation Synthesis)
 

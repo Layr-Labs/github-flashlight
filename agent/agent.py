@@ -5,7 +5,12 @@ import os
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
-from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions, AgentDefinition, HookMatcher
+from claude_agent_sdk import (
+    ClaudeSDKClient,
+    ClaudeAgentOptions,
+    AgentDefinition,
+    HookMatcher,
+)
 
 from agent.utils.subagent_tracker import SubagentTracker
 from agent.utils.transcript import setup_session, TranscriptWriter
@@ -23,8 +28,8 @@ DEBUG = os.environ.get("AGENT_DEBUG", "false").lower() in ("true", "1", "yes")
 log_level = logging.DEBUG if DEBUG else (logging.INFO if VERBOSE else logging.WARNING)
 logging.basicConfig(
     level=log_level,
-    format='%(asctime)s [%(name)s] %(levelname)s: %(message)s',
-    datefmt='%H:%M:%S'
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
@@ -58,9 +63,9 @@ async def chat():
     # Load prompts
     lead_agent_prompt = load_prompt("lead_agent.txt")
     base_code_analyzer_prompt = load_prompt("code_analyzer.txt")
-    architecture_documenter_prompt = load_prompt("subagents/architecture_documenter.txt")
-    website_generator_prompt = load_prompt("website_generator.txt")
-
+    architecture_documenter_prompt = load_prompt(
+        "subagents/architecture_documenter.txt"
+    )
     # Load analysis templates and enhance code analyzer prompt
     templates_dir = Path(__file__).parent.parent / "templates" / "analysis-template"
     template_loader = TemplateLoader(templates_dir)
@@ -85,9 +90,7 @@ async def chat():
 
     # Initialize subagent tracker with transcript writer and session directory
     tracker = SubagentTracker(
-        transcript_writer=transcript,
-        session_dir=session_dir,
-        verbose=VERBOSE
+        transcript_writer=transcript, session_dir=session_dir, verbose=VERBOSE
     )
 
     # Define specialized subagents
@@ -104,7 +107,7 @@ async def chat():
             ),
             tools=["Glob", "Grep", "Read", "Bash", "Write"],
             prompt=code_analyzer_prompt,
-            model="sonnet"  # Use sonnet for complex code analysis
+            model="sonnet",  # Use sonnet for complex code analysis
         ),
         "application-analyzer": AgentDefinition(
             description=(
@@ -118,7 +121,7 @@ async def chat():
             ),
             tools=["Glob", "Grep", "Read", "Bash", "Write"],
             prompt=code_analyzer_prompt,
-            model="sonnet"  # Use sonnet for complex code analysis
+            model="sonnet",  # Use sonnet for complex code analysis
         ),
         "architecture-documenter": AgentDefinition(
             description=(
@@ -127,56 +130,49 @@ async def chat():
             ),
             tools=["Glob", "Read", "Write"],
             prompt=architecture_documenter_prompt,
-            model="sonnet"  # Use sonnet for comprehensive synthesis
+            model="sonnet",  # Use sonnet for comprehensive synthesis
         ),
-        "website-generator": AgentDefinition(
-            description=(
-                "Use this agent AFTER architecture documentation is complete to generate a web frontend. "
-                "The website-generator reads all service analyses, dependency graphs, and architecture docs "
-                "from /tmp/{SERVICE_NAME}/, then creates a complete React SPA with D3.js interactive "
-                "dependency graph visualization in /tmp/{SERVICE_NAME}/website/. Generates all necessary "
-                "files: package.json, components, styles, and build instructions. Spawn this agent once "
-                "at the very end to create the interactive website."
-            ),
-            tools=["Glob", "Read", "Write", "Bash"],
-            prompt=website_generator_prompt,
-            model="sonnet"  # Use sonnet for comprehensive web app generation
-        )
     }
 
     # Set up hooks for tracking subagent states
     # and lifecycle movements
-    # 
+    #
     hooks = {
-        'PreToolUse': [
+        "PreToolUse": [
             HookMatcher(
                 matcher=None,  # Match all tools
-                hooks=[tracker.pre_tool_use_hook]
+                hooks=[tracker.pre_tool_use_hook],
             )
         ],
-        'PostToolUse': [
+        "PostToolUse": [
             HookMatcher(
                 matcher=None,  # Match all tools
-                hooks=[tracker.post_tool_use_hook]
+                hooks=[tracker.post_tool_use_hook],
             )
         ],
-        'SubagentStop': [
+        "SubagentStop": [
             HookMatcher(
                 matcher=None,  # Match all tools
-                hooks=[tracker.post_subagent_stop_hook]
+                hooks=[tracker.post_subagent_stop_hook],
             )
-        ]
+        ],
     }
 
     options = ClaudeAgentOptions(
         permission_mode="bypassPermissions",
         setting_sources=["project"],  # Load skills from project .claude directory
         system_prompt=lead_agent_prompt,
-        allowed_tools=["Task", "Glob", "Read", "Bash", "Write"],  # Lead agent has discovery tools
+        allowed_tools=[
+            "Task",
+            "Glob",
+            "Read",
+            "Bash",
+            "Write",
+        ],  # Lead agent has discovery tools
         agents=agents,
         hooks=hooks,
         model="sonnet",  # Use sonnet for orchestration and discovery
-        max_thinking_tokens=9999  # Enable thinking blocks for lead agent (10k token budget)
+        max_thinking_tokens=9999,  # Enable thinking blocks for lead agent (10k token budget)
     )
 
     print("\n" + "=" * 50)
@@ -207,7 +203,7 @@ async def chat():
 
                 # Write user input to transcript (file only, not console)
                 transcript.write_to_file(f"\nYou: {user_input}\n")
-                
+
                 await client.query(prompt=user_input)
 
                 transcript.write("\nAgent: ", end="")
@@ -223,13 +219,18 @@ async def chat():
                         logger.debug(f"   Message {message_count}: {msg_type}")
 
                     # Track API calls by counting AssistantMessages (each represents an API round-trip)
-                    if msg_type == 'AssistantMessage':
+                    if msg_type == "AssistantMessage":
                         api_call_count += 1
-                        print(f"\n🌐 [CLAUDE CALL #{api_call_count}] Claude AssistantMessage completed", flush=True)
+                        print(
+                            f"\n🌐 [CLAUDE CALL #{api_call_count}] Claude AssistantMessage completed",
+                            flush=True,
+                        )
                         process_assistant_message(msg, tracker, transcript)
 
                 if VERBOSE:
-                    logger.info(f"✓ RESPONSE COMPLETE ({message_count} messages, {api_call_count} API calls)")
+                    logger.info(
+                        f"✓ RESPONSE COMPLETE ({message_count} messages, {api_call_count} API calls)"
+                    )
 
                 transcript.write("\n")
     finally:

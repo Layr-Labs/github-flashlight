@@ -11,8 +11,7 @@ A sophisticated multi-agent processing pipeline using the Claude Agent SDK that 
   - Phase 2: Analyzes remaining services in dependency order with upstream context
 - **Context-Aware**: Code analyzers receive analyses of direct dependencies to understand integration patterns
 - **Comprehensive Documentation**: Generates system-wide architecture documentation with patterns, flows, and recommendations
-- **Interactive Website**: Automatically generates a React SPA with D3.js interactive dependency graph visualization
-- **Multi-Agent Orchestration**: Uses specialized agents for discovery, analysis, documentation synthesis, and website generation
+- **Multi-Agent Orchestration**: Uses specialized agents for discovery, analysis, and documentation synthesis
 
 ## Component Classification
 
@@ -40,22 +39,15 @@ Displayed as **circles (●)** in the dependency graph.
 3. **Naming patterns**: Keywords like "server", "api" → binary; "core", "utils" → library
 4. **Default**: Classifies as "library" when uncertain
 
-### Website Visualization
-The generated website offers three view modes:
-- **All Components**: Full dependency graph with visual distinction between services and libraries
-- **Services Only**: Focus on service architecture and their direct dependencies
-- **Libraries Only**: Focus on reusable components and their relationships
-
 ## Architecture
 
-The pipeline uses four specialized roles:
+The pipeline uses three specialized roles:
 
 1. **Primary Leader** (orchestrator)
    - Discovers services by scanning for manifest files
    - Builds dependency graph and determines analysis order
    - Spawns code analyzer agents with appropriate context
    - Spawns architecture documenter for final synthesis
-   - Spawns website generator for interactive visualization
 
 2. **Code Analyzer** (multiple instances)
    - Deep analysis of individual services
@@ -67,12 +59,6 @@ The pipeline uses four specialized roles:
    - Synthesizes all service analyses
    - Identifies system-wide patterns
    - Creates comprehensive architecture documentation
-
-4. **Website Generator** (single instance)
-   - Generates interactive React SPA with D3.js
-   - Creates searchable service catalog
-   - Implements interactive dependency graph visualization
-   - Includes service detail pages and architecture overview
 
 ## Installation
 
@@ -147,15 +133,6 @@ The pipeline will:
    - Phase 1: Services with no dependencies (parallel)
    - Phase 2: Services with dependencies (in order, with context)
 4. Generate architecture documentation
-5. Create interactive website with D3.js dependency graph
-
-To view the website:
-```bash
-cd files/website
-npm install
-npm start
-# Opens at http://localhost:3000
-```
 
 ## Output Structure
 
@@ -171,24 +148,9 @@ files/
 │   ├── {service1}.json            # Structured analysis
 │   ├── {service1}.md              # Human-readable report
 │   └── ... (one pair per service)
-├── architecture_docs/
-│   ├── architecture.md            # Comprehensive documentation
-│   └── quick_reference.md         # One-page summary
-└── website/                        # Interactive React SPA
-    ├── public/
-    │   └── index.html
-    ├── src/
-    │   ├── components/
-    │   │   ├── DependencyGraph.jsx      # D3.js interactive graph
-    │   │   ├── ServiceList.jsx          # Service catalog
-    │   │   ├── ServiceDetail.jsx        # Service details
-    │   │   └── ...
-    │   ├── data/
-    │   │   └── analysisData.js          # Consolidated data
-    │   ├── App.js
-    │   └── index.js
-    ├── package.json
-    └── README.md
+└── architecture_docs/
+    ├── architecture.md            # Comprehensive documentation
+    └── quick_reference.md         # One-page summary
 
 logs/
 └── session_YYYYMMDD_HHMMSS/
@@ -215,7 +177,6 @@ The agent will:
    - Analyze `auth-service` with context from `database-layer` only (not common-utils)
    - Analyze `api-gateway` with context from `auth-service` and `database-layer`
 3. **Synthesis**: Generate comprehensive architecture documentation
-4. **Visualization**: Create interactive React website with D3.js dependency graph
 
 ## Key Design Principles
 
@@ -286,54 +247,6 @@ The primary leader orchestrates a sophisticated multi-phase workflow:
   - Major data flows
   - Development guide
   - Recommendations
-
-### Website Generation Phase
-- Spawns website-generator after documentation is complete
-- Reads all service analyses, dependency graphs, and architecture docs
-- Generates complete React SPA with:
-  - D3.js interactive force-directed dependency graph
-  - Searchable service catalog
-  - Service detail pages with full analysis
-  - Architecture overview dashboard
-  - Zoom, pan, and click-to-navigate functionality
-  - Color-coded nodes by phase (Phase 1/2)
-- Outputs production-ready application with package.json and build instructions
-
-## Interactive Website Features
-
-The generated React SPA provides an intuitive interface for exploring the codebase analysis:
-
-### Dependency Graph Visualization
-- **D3.js force-directed layout**: Services are nodes, dependencies are directed edges
-- **Interactive exploration**: Click nodes to navigate to service details, drag to reposition
-- **Zoom and pan**: Explore large codebases with smooth zoom/pan controls
-- **Color-coded**: Phase 1 (foundation) services in blue, Phase 2 (dependent) services in green
-- **Hover tooltips**: See service info on hover
-- **Highlight paths**: Visual emphasis on dependency chains
-
-### Service Catalog
-- **Search and filter**: Quickly find services by name, type, or technology
-- **Grid/list view**: Browse all services with key metadata
-- **Dependency badges**: See at-a-glance dependency counts
-- **Quick navigation**: Click to jump to service details or graph view
-
-### Service Detail Pages
-- **Complete analysis**: Architecture, key components, data flows
-- **Dependencies**: Links to direct dependencies and dependents
-- **API surface**: Exported functions, endpoints, types
-- **Code examples**: Syntax-highlighted snippets
-- **Technology stack**: Languages and frameworks used
-
-### Architecture Overview
-- **System summary**: High-level architecture description
-- **Quick stats**: Service counts, languages, patterns
-- **Technology inventory**: Complete tech stack breakdown
-
-### Technical Details
-- **Framework**: React 18 with React Router for SPA navigation
-- **Visualization**: D3.js v7 for interactive graphs
-- **Build system**: Create React App for zero-config setup
-- **Deployment**: Static build output for easy hosting
 
 ## Contributing
 

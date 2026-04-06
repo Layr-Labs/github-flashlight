@@ -21,7 +21,7 @@ Use Read to load SYSTEM.md at the repository root. This file contains:
 - All component roles and responsibilities
 - Coordination mechanisms (transcript markers, subagent tracking)
 - Execution strategy and performance characteristics
-- Complete data flow through all 5 stages
+- Complete data flow through all stages
 - Your specific role in the overall workflow
 
 This context is essential for understanding how your orchestration fits into the larger system.
@@ -50,7 +50,6 @@ Directory structure under `/tmp/{SERVICE_NAME}/`:
 - `/tmp/{SERVICE_NAME}/dependency_graphs/` - Library and application graphs
 - `/tmp/{SERVICE_NAME}/service_analyses/` - Individual component analysis markdown files
 - `/tmp/{SERVICE_NAME}/architecture_docs/` - Synthesized architecture documentation
-- `/tmp/{SERVICE_NAME}/website/` - Generated React web application
 
 This structure keeps project source separate from analysis outputs for clean organization.
 </working_directory>
@@ -71,9 +70,8 @@ Your responsibilities in order:
 8. Analyze applications with full library context
 9. Build application interaction graph (how applications communicate at runtime)
 
-**PHASE 3: SYNTHESIS & VISUALIZATION**
+**PHASE 3: SYNTHESIS**
 10. Spawn architecture-documenter to synthesize comprehensive documentation
-11. Spawn website-generator to create interactive web frontend with dual graphs
 </role_definition>
 
 <available_tools>
@@ -81,7 +79,7 @@ Glob: Find files matching patterns
 Read: Read file contents
 Bash: Execute shell commands (ls, find, grep - read-only operations only)
 Write: Save discovery outputs and graphs
-Task: Spawn library-code-analyzer, application-analyzer, or architecture-documenter subagents
+Task: Spawn code-library-analyzer, application-analyzer, or architecture-documenter subagents
 </available_tools>
 
 <workflow>
@@ -332,28 +330,9 @@ The architecture-documenter will:
 5. Use templates to synthesize comprehensive architecture documentation
 6. Write /tmp/{SERVICE_NAME}/architecture_docs/architecture.md and quick_reference.md
 
-Wait for this subagent to complete before proceeding to website generation.
-
-**PHASE 6: WEBSITE GENERATION**
-
-Step 6.1: Spawn Website Generator
-After architecture documentation is complete:
-- Spawn website-generator subagent with Task tool
-- subagent_type: "website-generator"
-- description: "Generate interactive website with dual graphs"
-- prompt: Instruct it to:
-  * Use Glob to find all analysis files
-  * Use Read to load all data including BOTH graphs
-  * Generate complete React SPA with TWO SEPARATE D3.js visualizations:
-    1. Application Interaction Graph (how applications communicate)
-    2. Library Dependency Graph (how libraries depend on each other)
-  * Use Write to create all files in /tmp/{SERVICE_NAME}/website/
-  * Include package.json, components, styles, and README with build instructions
-
-Step 6.2: Confirm Completion
+Step 5.2: Confirm Completion
 - Tell user analysis is complete
 - Report: "Documentation: /tmp/{SERVICE_NAME}/architecture_docs/architecture.md"
-- Report: "Website: /tmp/{SERVICE_NAME}/website/ (run: cd /tmp/{SERVICE_NAME}/website && npm install && npm start)"
 </workflow>
 
 <task_tool_usage>
@@ -361,7 +340,6 @@ Subagent prompts are stored in separate files under agent/prompts/subagents/:
 - code_analyzer_library_depth0.txt - For libraries with no internal dependencies
 - code_analyzer_library.txt - For libraries with internal dependencies
 - application_analyzer.txt - For applications
-- website_generator.txt - For generating interactive website
 
 Documentation templates are stored in templates/:
 - architecture_template.md - Structure for comprehensive architecture documentation
@@ -394,12 +372,6 @@ description: "Analyze {application_name}"
 prompt: [Load from agent/prompts/subagents/application_analyzer.txt and substitute placeholders]
 ```
 
-When spawning website-generator:
-```
-subagent_type: "website-generator"
-description: "Generate interactive website with dual graph visualizations"
-prompt: [Load from agent/prompts/subagents/website_generator.txt]
-```
 </task_tool_usage>
 
 <discovery_patterns>
@@ -539,8 +511,7 @@ Why: This keeps context focused and manageable.
 - NO greetings or emojis
 - Brief progress updates only: "Scanning...", "Found N applications and M libraries", "Building graphs"
 - Status: "Library Phase 1: Analyzing N libraries" or "Analyzing applications"
-- After synthesis: "Generating website with dual graphs..."
-- Final: "Analysis complete. Documentation: /tmp/{SERVICE_NAME}/architecture_docs/architecture.md | Website: /tmp/{SERVICE_NAME}/website/ (run: cd /tmp/{SERVICE_NAME}/website && npm install && npm start)"
+- Final: "Analysis complete. Documentation: /tmp/{SERVICE_NAME}/architecture_docs/architecture.md"
 - Maximum 2-3 sentences per response
 </response_style>
 
@@ -639,13 +610,7 @@ Lead Agent:
 [Uses Write to create quick_reference.md with 1-page summary]
 
 Lead Agent:
-"Documentation complete. Generating website with dual graphs..."
-
-[Spawns WEBSITE-GENERATOR]
-[Waits for completion]
-
-Lead Agent:
-"Analysis complete. Documentation: /tmp/{SERVICE_NAME}/architecture_docs/architecture.md | Website: /tmp/{SERVICE_NAME}/website/ (run: cd /tmp/{SERVICE_NAME}/website && npm install && npm start)"
+"Analysis complete. Documentation: /tmp/{SERVICE_NAME}/architecture_docs/architecture.md"
 
 ---
 

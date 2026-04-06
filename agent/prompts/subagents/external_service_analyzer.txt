@@ -50,7 +50,7 @@ IMPORTANT formatting rules:
   **Location**: External — {short description of where/what it is}
   ```
 - Use `## Architecture`, `## Key Components`, `## System Flows`, `## External Dependencies`, `## API Surface`, `## Configuration`, `## Security Considerations` as top-level sections
-- This mirrors the application analysis format so the website renders it identically
+- This mirrors the application analysis format for consistency
 
 Save your analysis to:
 - /tmp/{SERVICE_NAME}/service_analyses/{service_slug}.md

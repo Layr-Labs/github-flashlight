@@ -3,8 +3,7 @@
 <overview>
   <purpose>
     Multi-agent codebase analysis system that performs dependency-aware, parallel analysis
-    of libraries and applications, generating comprehensive architecture documentation and
-    interactive visualizations.
+    of libraries and applications, generating comprehensive architecture documentation.
   </purpose>
 
   <architecture>
@@ -52,17 +51,6 @@
       <output>files/service_analyses/{application_name}.md</output>
     </component>
 
-
-    <component name="website-generator">
-      <role>Interactive web frontend generation</role>
-      <responsibilities>
-        - Reads all analyses, graphs, and architecture docs
-        - Generates React SPA with D3.js dependency graph visualization
-        - Creates complete package with build instructions
-      </responsibilities>
-      <tools>Glob, Read, Write, Bash</tools>
-      <output>files/website/ (complete React application)</output>
-    </component>
   </architecture>
 
   <coordination_mechanism>
@@ -182,19 +170,6 @@
       </output>
     </stage>
 
-    <stage name="website-generation">
-      <input>
-        - All analyses from files/service_analyses/
-        - All graphs from files/dependency_graphs/
-        - Architecture docs from files/architecture_docs/
-      </input>
-      <process>
-        - Generate React SPA with D3.js visualization
-        - Create interactive dependency graph explorer
-        - Include all documentation and analysis details
-      </process>
-      <output>files/website/ (complete deployable application)</output>
-    </stage>
   </data_flow>
 
   <workflow_steps>
@@ -217,9 +192,6 @@
       - When [ALL_APPLICATION_ANALYSIS_COMPLETE] appears, lead agent synthesizes architecture docs
     </step>
 
-    <step number="5" name="website-generation">
-      Generate interactive web frontend (runs after architecture docs complete)
-    </step>
   </workflow_steps>
 </overview>
 
