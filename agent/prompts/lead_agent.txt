@@ -50,6 +50,7 @@ Directory structure under `/tmp/{SERVICE_NAME}/`:
 - `/tmp/{SERVICE_NAME}/dependency_graphs/` - Library and application graphs
 - `/tmp/{SERVICE_NAME}/service_analyses/` - Individual component analysis markdown files
 - `/tmp/{SERVICE_NAME}/architecture_docs/` - Synthesized architecture documentation
+- `/tmp/{SERVICE_NAME}/manifest.json` - **Artifact version manifest** (created at start, finalized at end)
 
 This structure keeps project source separate from analysis outputs for clean organization.
 </working_directory>
@@ -82,6 +83,63 @@ Write: Save discovery outputs and graphs
 Task: Spawn code-library-analyzer, application-analyzer, external-service-analyzer, or architecture-documenter subagents
 </available_tools>
 
+<incremental_analysis>
+**INCREMENTAL (DIFF-DRIVEN) ANALYSIS MODE**
+
+When the user prompt includes a CHANGED_COMPONENTS section, you are running in incremental mode.
+This means a prior analysis already exists and only specific components need re-analysis.
+
+**How to detect incremental mode:**
+- The prompt contains "CHANGED_COMPONENTS:" followed by a list of component names
+- The prompt contains "EXISTING_ARTIFACTS:" pointing to the prior artifact directory
+
+**Incremental mode rules:**
+
+1. **Phase 0 (Project Setup)**: Same as full analysis — copy project, initialize manifest.
+   - Use `create_next_version` to increment the artifact version (read prior manifest first).
+   - If the prompt includes SOURCE_COMMIT, use that as the source_commit in the manifest.
+
+2. **Phase 1 (Library Discovery)**: SKIP full discovery.
+   - Read the existing `service_discovery/libraries.json` from EXISTING_ARTIFACTS.
+   - Copy it to `/tmp/{SERVICE_NAME}/service_discovery/libraries.json`.
+   - Only run discovery if NEW_FILES_OUTSIDE_KNOWN_COMPONENTS is present in the prompt
+     (these may indicate new components that need to be discovered).
+
+3. **Phase 2 (Library Graph & Analysis)**:
+   - Copy the existing `dependency_graphs/` from EXISTING_ARTIFACTS.
+   - Copy ALL existing `service_analyses/*.md` from EXISTING_ARTIFACTS.
+   - Re-analyze ONLY the libraries listed in CHANGED_COMPONENTS.
+   - For changed libraries, read their existing analysis as context before re-analyzing,
+     so the output is a coherent update rather than starting from scratch.
+   - If the changed libraries have dependents (other libraries that depend on them),
+     consider re-analyzing those dependents too since their upstream context changed.
+   - Rebuild the library dependency graph after analysis (run build_dependency_graph.py).
+
+4. **Phase 3 (Application Discovery)**: SKIP full discovery.
+   - Read the existing `service_discovery/applications.json` from EXISTING_ARTIFACTS.
+   - Copy it to `/tmp/{SERVICE_NAME}/service_discovery/applications.json`.
+
+5. **Phase 4 (Application Analysis)**:
+   - Re-analyze ONLY the applications listed in CHANGED_COMPONENTS.
+   - Copy existing analysis files for unchanged applications.
+   - For changed applications, read their existing analysis as context.
+
+6. **Phase 5 (External Services)**: Only re-analyze if changed components have new external integrations.
+
+7. **Phase 6 (Architecture Synthesis)**: ALWAYS run.
+   - The architecture-documenter must re-synthesize architecture.md and quick_reference.md
+     because the overall picture may have changed.
+   - Pass the existing architecture.md as context for continuity.
+
+**When NEW_FILES_OUTSIDE_KNOWN_COMPONENTS is present:**
+- These files don't match any known component's root_path.
+- Run targeted discovery on these paths to determine if they represent new components.
+- If new components are found, add them to the libraries/applications inventory and analyze them.
+
+**Key principle:** Only do work proportional to what changed. If 3 out of 24 components changed,
+you should only spawn 3 analyzer subagents (plus architecture synthesis at the end).
+</incremental_analysis>
+
 <workflow>
 **PHASE 0: PROJECT SETUP**
 
@@ -92,6 +150,31 @@ Step 0.1: Copy Project to Working Directory
 - Use Bash: `cp -r /path/to/original/project/* /tmp/{SERVICE_NAME}/project/`
 - Change working directory: `cd /tmp/{SERVICE_NAME}/project`
 - All subsequent Glob, Grep, and Read operations work within this directory
+
+Step 0.2: Initialize Artifact Manifest
+- Create `/tmp/{SERVICE_NAME}/manifest.json` to track this analysis run
+- If a previous manifest.json exists in the target artifacts location, read it and increment the version
+- Otherwise start at version 1
+- Try to capture the source repo git commit hash: `git -C /tmp/{SERVICE_NAME}/project rev-parse HEAD`
+- Use Write to save the initial manifest:
+  ```json
+  {
+    "service_name": "{SERVICE_NAME}",
+    "artifact_version": 1,
+    "generated_at": "{ISO_8601_TIMESTAMP}",
+    "model": "claude-sonnet-4-20250514",
+    "generator": "github-flashlight",
+    "schema_version": "1.0.0",
+    "source_repo": "{REPO_PATH_OR_URL}",
+    "source_commit": "{GIT_COMMIT_HASH_OR_EMPTY}",
+    "libraries_count": 0,
+    "applications_count": 0,
+    "total_files": 0,
+    "files": [],
+    "metadata": {}
+  }
+  ```
+- The manifest will be updated with file inventory and counts by the architecture-documenter at the end
 
 **PHASE 1: LIBRARY DISCOVERY**
 
@@ -400,10 +483,15 @@ The architecture-documenter will:
 4. Aggregate all external dependencies into a comprehensive technology inventory
 5. Use templates to synthesize comprehensive architecture documentation
 6. Write /tmp/{SERVICE_NAME}/architecture_docs/architecture.md and quick_reference.md
+7. **Finalize /tmp/{SERVICE_NAME}/manifest.json** — read the initial manifest, update libraries_count,
+   applications_count, and populate the files[] array with every .md and .json artifact file produced
+   during this analysis run (with relative paths, file sizes, SHA-256 checksums, and category labels).
+   Write the finalized manifest back.
 
 Step 6.2: Confirm Completion
 - Tell user analysis is complete
 - Report: "Documentation: /tmp/{SERVICE_NAME}/architecture_docs/architecture.md"
+- Report: "Artifact version: v{N} (see /tmp/{SERVICE_NAME}/manifest.json)"
 </workflow>
 
 <task_tool_usage>

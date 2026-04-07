@@ -18,6 +18,10 @@ dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
 ]
+rag = [
+    "streamlit>=1.35.0",
+    "anthropic>=0.30.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -25,3 +29,4 @@ include = ["agent*"]
 
 [project.scripts]
 code-analysis-agent = "agent.agent:chat"
+flashlight = "agent.cli:main"
