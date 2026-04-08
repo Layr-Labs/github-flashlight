@@ -5,6 +5,7 @@ from .go import GoPlugin
 from .python import PythonPlugin
 from .typescript import TypeScriptPlugin
 from .rust import RustPlugin
+from .solidity import SolidityPlugin
 
 # Plugin registry: each plugin knows how to discover components for its language.
 # Order matters — first match wins for a given manifest file.
@@ -13,6 +14,7 @@ ALL_PLUGINS: list[LanguagePlugin] = [
     PythonPlugin(),
     TypeScriptPlugin(),
     RustPlugin(),
+    SolidityPlugin(),
 ]
 
 __all__ = [
@@ -21,5 +23,6 @@ __all__ = [
     "PythonPlugin",
     "TypeScriptPlugin",
     "RustPlugin",
+    "SolidityPlugin",
     "ALL_PLUGINS",
 ]
