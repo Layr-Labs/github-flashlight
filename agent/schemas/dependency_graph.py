@@ -71,32 +71,70 @@ class DependencyGraph:
 
     def get_analysis_order(self) -> Tuple[List[str], List[str]]:
         """
-        Get the two-phase analysis order.
+        Get the two-phase analysis order (legacy interface).
 
         Returns:
             Tuple of (phase1_components, phase2_components_ordered)
-            - phase1: Components with no dependencies (can be analyzed in parallel)
-            - phase2: Remaining components in topological order
         """
-        # Calculate out-degree (number of dependencies) for each node
-        # In a dependency graph where edges mean "from depends on to",
-        # we want to find nodes with NO outgoing edges (no dependencies)
-
-        # Phase 1: Components with no dependencies (no outgoing edges)
-        phase1 = [node for node in self.nodes if len(self.edges.get(node, [])) == 0]
-
-        # For topological sort of remaining nodes, we need in-degree
-        # (how many nodes depend on this node)
-        in_degree = {node: 0 for node in self.nodes}
-        for node in self.nodes:
-            for dep in self.edges.get(node, []):
-                in_degree[dep] += 1
-
-        # Phase 2: Remaining components in topological order using Kahn's algorithm
-        remaining_nodes = [node for node in self.nodes if node not in phase1]
-        phase2 = self._topological_sort(remaining_nodes, in_degree)
-
+        depth_order = self.get_depth_order()
+        phase1 = depth_order[0] if depth_order else []
+        phase2 = []
+        for level in depth_order[1:]:
+            phase2.extend(level)
         return (phase1, phase2)
+
+    def get_depth_order(self) -> List[List[str]]:
+        """
+        Get N-level depth-ordered analysis buckets.
+
+        Returns a list of lists where:
+            depth[0] = components with no dependencies (all parallelizable)
+            depth[1] = components depending only on depth 0
+            depth[N] = components depending on depth N-1 or lower
+
+        Each depth level can be analyzed fully in parallel.
+        Components at depth N are guaranteed to have all their
+        dependencies analyzed at depth < N.
+        """
+        # Compute depth for each node
+        depth_map: Dict[str, int] = {}
+
+        def compute_depth(node: str, visiting: set) -> int:
+            if node in depth_map:
+                return depth_map[node]
+            if node in visiting:
+                raise ValueError(f"Dependency cycle detected involving '{node}'")
+
+            deps = self.edges.get(node, [])
+            if not deps:
+                depth_map[node] = 0
+                return 0
+
+            visiting.add(node)
+            max_dep_depth = max(
+                compute_depth(dep, visiting)
+                for dep in deps
+                if dep in set(self.nodes)  # only count known nodes
+            ) if any(dep in set(self.nodes) for dep in deps) else -1
+            visiting.discard(node)
+
+            depth_map[node] = max_dep_depth + 1
+            return depth_map[node]
+
+        for node in self.nodes:
+            if node not in depth_map:
+                compute_depth(node, set())
+
+        # Group by depth
+        if not depth_map:
+            return []
+
+        max_depth = max(depth_map.values())
+        levels: List[List[str]] = [[] for _ in range(max_depth + 1)]
+        for node, depth in sorted(depth_map.items()):
+            levels[depth].append(node)
+
+        return levels
 
     def _topological_sort(self, nodes: List[str], in_degree: Dict[str, int]) -> List[str]:
         """
