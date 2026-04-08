@@ -95,35 +95,55 @@ class DependencyGraph:
         Each depth level can be analyzed fully in parallel.
         Components at depth N are guaranteed to have all their
         dependencies analyzed at depth < N.
+
+        Cycles are handled by collapsing strongly-connected components
+        into the same depth level.
         """
-        # Compute depth for each node
-        depth_map: Dict[str, int] = {}
+        node_set = set(self.nodes)
 
-        def compute_depth(node: str, visiting: set) -> int:
-            if node in depth_map:
-                return depth_map[node]
-            if node in visiting:
-                raise ValueError(f"Dependency cycle detected involving '{node}'")
+        # First, find strongly connected components (cycles)
+        sccs = self._find_sccs()
 
-            deps = self.edges.get(node, [])
+        # Assign each node to its SCC index
+        node_to_scc: Dict[str, int] = {}
+        for i, scc in enumerate(sccs):
+            for node in scc:
+                node_to_scc[node] = i
+
+        # Build a DAG of SCCs
+        scc_edges: Dict[int, set] = {i: set() for i in range(len(sccs))}
+        for node in self.nodes:
+            for dep in self.edges.get(node, []):
+                if dep in node_set:
+                    src_scc = node_to_scc[node]
+                    dst_scc = node_to_scc[dep]
+                    if src_scc != dst_scc:
+                        scc_edges[src_scc].add(dst_scc)
+
+        # Compute depth on the SCC DAG (guaranteed acyclic)
+        scc_depth: Dict[int, int] = {}
+
+        def compute_scc_depth(scc_idx: int) -> int:
+            if scc_idx in scc_depth:
+                return scc_depth[scc_idx]
+
+            deps = scc_edges.get(scc_idx, set())
             if not deps:
-                depth_map[node] = 0
+                scc_depth[scc_idx] = 0
                 return 0
 
-            visiting.add(node)
-            max_dep_depth = max(
-                compute_depth(dep, visiting)
-                for dep in deps
-                if dep in set(self.nodes)  # only count known nodes
-            ) if any(dep in set(self.nodes) for dep in deps) else -1
-            visiting.discard(node)
+            max_dep = max(compute_scc_depth(d) for d in deps)
+            scc_depth[scc_idx] = max_dep + 1
+            return scc_depth[scc_idx]
 
-            depth_map[node] = max_dep_depth + 1
-            return depth_map[node]
+        for i in range(len(sccs)):
+            if i not in scc_depth:
+                compute_scc_depth(i)
 
+        # Map nodes to depths via their SCC
+        depth_map: Dict[str, int] = {}
         for node in self.nodes:
-            if node not in depth_map:
-                compute_depth(node, set())
+            depth_map[node] = scc_depth[node_to_scc[node]]
 
         # Group by depth
         if not depth_map:
@@ -135,6 +155,48 @@ class DependencyGraph:
             levels[depth].append(node)
 
         return levels
+
+    def _find_sccs(self) -> List[List[str]]:
+        """Find strongly connected components using Tarjan's algorithm."""
+        index_counter = [0]
+        stack: List[str] = []
+        lowlinks: Dict[str, int] = {}
+        index: Dict[str, int] = {}
+        on_stack: Dict[str, bool] = {}
+        sccs: List[List[str]] = []
+        node_set = set(self.nodes)
+
+        def strongconnect(node: str):
+            index[node] = index_counter[0]
+            lowlinks[node] = index_counter[0]
+            index_counter[0] += 1
+            stack.append(node)
+            on_stack[node] = True
+
+            for dep in self.edges.get(node, []):
+                if dep not in node_set:
+                    continue
+                if dep not in index:
+                    strongconnect(dep)
+                    lowlinks[node] = min(lowlinks[node], lowlinks[dep])
+                elif on_stack.get(dep, False):
+                    lowlinks[node] = min(lowlinks[node], index[dep])
+
+            if lowlinks[node] == index[node]:
+                scc = []
+                while True:
+                    w = stack.pop()
+                    on_stack[w] = False
+                    scc.append(w)
+                    if w == node:
+                        break
+                sccs.append(scc)
+
+        for node in self.nodes:
+            if node not in index:
+                strongconnect(node)
+
+        return sccs
 
     def _topological_sort(self, nodes: List[str], in_degree: Dict[str, int]) -> List[str]:
         """

@@ -27,6 +27,12 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+from agent.discovery.engine import discover_components
+from agent.discovery.validator import validate_discovery, validate_graph
+from agent.schemas.core import Component, ComponentKind
+from agent.schemas.dependency_graph import DependencyGraph
+
 from claude_agent_sdk import (
     ClaudeSDKClient,
     ClaudeAgentOptions,
@@ -195,6 +201,25 @@ def build_analysis_prompt(
     if head_sha:
         prompt += f"\n\nSOURCE_COMMIT: {head_sha}"
 
+    # Tell the LLM that discovery has already been done
+    work_dir = Path(f"/tmp/{service_name}")
+    discovery_file = work_dir / "service_discovery" / "components.json"
+    graph_file = work_dir / "dependency_graphs" / "library_graph.json"
+
+    if discovery_file.exists():
+        prompt += (
+            "\n\nDISCOVERY_COMPLETE: Component discovery has already been done deterministically."
+            f"\nRead the component inventory at: {discovery_file}"
+        )
+        if graph_file.exists():
+            prompt += f"\nRead the dependency graph at: {graph_file}"
+        prompt += (
+            "\n\nSKIP Phase 0.2 (library discovery) and Phase 1.1 (application discovery)."
+            "\nThe components.json and library_graph.json are already populated."
+            "\nStart directly with Phase 1.2 (library analysis) using the depth order"
+            "\nfrom the graph file. Spawn code-library-analyzer subagents for each library."
+        )
+
     if diff_context["mode"] == "incremental":
         components = diff_context["changed_components"]
         prompt += "\n\nCHANGED_COMPONENTS:"
@@ -286,6 +311,90 @@ async def analyze(
             print(f"  - {name}")
     else:
         print("Full analysis (no prior state or diff unavailable)")
+
+    # ---------------------------------------------------------------
+    # Phase 0: Deterministic discovery (zero LLM calls)
+    # ---------------------------------------------------------------
+    print("\nRunning deterministic discovery...")
+    work_dir = Path(f"/tmp/{service_name}")
+    work_dir.mkdir(parents=True, exist_ok=True)
+    discovery_dir = work_dir / "service_discovery"
+    graph_dir = work_dir / "dependency_graphs"
+
+    # Discover components from source
+    components = discover_components(repo, output_dir=discovery_dir)
+    print(f"  Discovered {len(components)} components")
+
+    # Log component summary by kind
+    by_kind: dict[str, list[str]] = {}
+    for comp in components:
+        by_kind.setdefault(comp.kind.value, []).append(comp.name)
+    for kind, names in sorted(by_kind.items()):
+        print(f"    {kind}: {', '.join(sorted(names)[:8])}", end="")
+        if len(names) > 8:
+            print(f" (+{len(names) - 8} more)")
+        else:
+            print()
+
+    # Validate discovery output
+    errors = validate_discovery(components, repo)
+    if errors:
+        print(f"  Discovery warnings: {len(errors)}")
+        for err in errors[:5]:
+            print(f"    - {err}")
+
+    # Build dependency graph
+    libraries = [c for c in components if c.is_library]
+    if libraries:
+        graph = DependencyGraph()
+        for lib in libraries:
+            graph.add_node(lib.name)
+        for lib in libraries:
+            for dep in lib.internal_dependencies:
+                if dep in {l.name for l in libraries}:
+                    graph.add_edge(lib.name, dep)
+
+        depth_order = graph.get_depth_order()
+        graph_errors = validate_graph(components, depth_order)
+        if graph_errors:
+            print(f"  Graph warnings: {len(graph_errors)}")
+
+        # Write graph
+        graph_dir.mkdir(parents=True, exist_ok=True)
+        phase1, phase2 = graph.get_analysis_order()
+        graph_json = {
+            "graph_type": "library_dependencies",
+            "nodes": [
+                {
+                    "id": lib.name,
+                    "type": lib.type,
+                    "kind": lib.kind.value,
+                    "phase": 1 if lib.name in phase1 else 2,
+                }
+                for lib in libraries
+            ],
+            "edges": [
+                {"from": name, "to": dep}
+                for name in graph.nodes
+                for dep in graph.get_direct_dependencies(name)
+            ],
+            "depth_order": [list(level) for level in depth_order],
+            "analysis_order": {"phase1": phase1, "phase2": phase2},
+        }
+        with open(graph_dir / "library_graph.json", "w") as f:
+            json.dump(graph_json, f, indent=2)
+
+        print(f"  Dependency graph: {len(depth_order)} depth levels")
+        for i, level in enumerate(depth_order):
+            print(f"    depth {i}: {', '.join(level[:6])}", end="")
+            if len(level) > 6:
+                print(f" (+{len(level) - 6} more)")
+            else:
+                print()
+    else:
+        print("  No libraries found — skipping dependency graph")
+
+    print()
 
     # Build the prompt
     artifacts_dir = output if output.exists() else None
