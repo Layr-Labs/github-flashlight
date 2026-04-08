@@ -60,5 +60,14 @@ Format in the markdown output as:
 
 Do NOT output bare dependency names without version, category, and usage details.
 
+**CITATION TRACKING — REQUIRED**
+
+As you analyze code, track every significant finding with its source location (file path + line numbers).
+When you read a file with the Read tool, note the line numbers for claims you will make.
+At the end of your Markdown output, include a `## Citations` section with a fenced JSON code block
+containing all your citations. See the `## Citations` section in the library_analysis_template.md for
+the exact format. Aim for 10-30 citations linking your analysis claims to specific source code locations.
+Only cite line numbers you actually observed — never guess.
+
 Save your analysis to:
 - /tmp/{SERVICE_NAME}/service_analyses/{library_name}.md (human-readable and adherent to library_analysis_template.md)

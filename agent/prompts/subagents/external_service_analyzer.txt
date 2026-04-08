@@ -52,5 +52,26 @@ IMPORTANT formatting rules:
 - Use `## Architecture`, `## Key Components`, `## System Flows`, `## External Dependencies`, `## API Surface`, `## Configuration`, `## Security Considerations` as top-level sections
 - This mirrors the application analysis format for consistency
 
+**CITATION TRACKING — REQUIRED**
+
+As you analyze code, track every significant finding with its source location (file path + line numbers).
+When you read a file with the Read tool, note the line numbers for claims you will make.
+At the end of your Markdown output, include a `## Citations` section with a fenced JSON code block
+containing all your citations. Format:
+```json
+[
+  {
+    "file_path": "relative/path/to/file.ext",
+    "start_line": 1,
+    "end_line": 10,
+    "claim": "The specific finding this code supports",
+    "section": "Architecture | Key Components | System Flows | API Surface | Configuration | Security Considerations",
+    "snippet": "optional: 1-5 line code excerpt"
+  }
+]
+```
+Aim for 10-25 citations linking your analysis claims to specific source code locations.
+Only cite line numbers you actually observed — never guess.
+
 Save your analysis to:
 - /tmp/{SERVICE_NAME}/service_analyses/{service_slug}.md

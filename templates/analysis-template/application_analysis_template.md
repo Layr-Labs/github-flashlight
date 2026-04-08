@@ -330,6 +330,45 @@ Separate runtime dependencies from dev/test dependencies if applicable.]
 
 [List all significant files that were analyzed to create this document. Include configuration files, main source files, tests, and documentation. This provides traceability and helps readers understand the scope of analysis.]
 
+## Citations
+
+<!--
+CITATION REQUIREMENTS — CRITICAL
+=================================
+This section provides machine-parseable provenance for every major claim in the analysis.
+It links analysis findings back to the exact source code locations where they were observed.
+
+The citations block MUST be a fenced JSON code block (```json ... ```) containing an array
+of citation objects. This block is parsed by the post-analysis citation extractor to produce
+a standalone citations.json file for RAG indexing.
+
+RULES:
+1. Every claim in "Architecture", "Key Components", "Data Flows", "API Surface", and
+   "External Systems" sections SHOULD have at least one supporting citation.
+2. file_path must be relative to the repository root (not absolute paths).
+3. start_line and end_line must be actual line numbers you observed when reading the file.
+   Do NOT guess line numbers — only cite lines you actually read with the Read tool.
+4. section must match the analysis section the claim belongs to (e.g., "Architecture",
+   "Key Components", "Data Flows", "API Surface", "Dependencies", "External Systems").
+5. claim should be a concise statement of the finding (1-2 sentences max).
+6. snippet is optional but encouraged for key findings — include the relevant code excerpt
+   (keep under 5 lines).
+7. Aim for 15-40 citations per component analysis. More is better for RAG retrieval.
+-->
+
+```json
+[
+  {
+    "file_path": "[relative/path/to/file.ext]",
+    "start_line": 1,
+    "end_line": 10,
+    "claim": "[The specific analysis finding this code supports]",
+    "section": "[Architecture | Key Components | Data Flows | API Surface | Dependencies | External Systems]",
+    "snippet": "[optional: 1-5 line code excerpt]"
+  }
+]
+```
+
 ## Analysis Notes
 
 [This section provides insights, observations, and recommendations based on the analysis]

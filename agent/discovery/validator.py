@@ -122,7 +122,9 @@ def validate_analysis(
 
     Checks:
     - Every component has a corresponding analysis .md file
-    - Analysis files reference valid source paths (spot check citations)
+    - Analysis files contain a ## Citations section with valid JSON
+    - Cited files exist in the repository (spot check)
+    - Cited line ranges are plausible (start <= end, within file length)
     """
     errors: List[str] = []
 
@@ -131,5 +133,114 @@ def validate_analysis(
         analysis_file = analyses_dir / f"{comp.name}.md"
         if not analysis_file.exists():
             errors.append(f"Missing analysis file for component '{comp.name}'")
+            continue
+
+        # Spot-check citations
+        citation_errors = _validate_citations_in_file(
+            analysis_file, comp.name, repo_root
+        )
+        errors.extend(citation_errors)
+
+    return errors
+
+
+def _validate_citations_in_file(
+    md_path: Path,
+    component_name: str,
+    repo_root: Path,
+    max_spot_checks: int = 5,
+) -> List[str]:
+    """Validate citations embedded in a Markdown analysis file.
+
+    Performs lightweight checks:
+    - ## Citations section exists
+    - JSON is parseable
+    - Spot-checks up to max_spot_checks citations for file existence and line plausibility.
+    """
+    import json
+    import re
+
+    errors: List[str] = []
+    text = md_path.read_text(encoding="utf-8")
+
+    # Look for ## Citations + ```json block
+    pattern = re.compile(
+        r"^## Citations\b.*?```json\s*\n(.*?)\n\s*```",
+        re.MULTILINE | re.DOTALL,
+    )
+    match = pattern.search(text)
+    if not match:
+        errors.append(
+            f"[{component_name}] Missing ## Citations section with JSON block"
+        )
+        return errors
+
+    json_text = match.group(1).strip()
+    if not json_text:
+        errors.append(f"[{component_name}] ## Citations JSON block is empty")
+        return errors
+
+    try:
+        data = json.loads(json_text)
+    except json.JSONDecodeError as exc:
+        errors.append(f"[{component_name}] Invalid JSON in ## Citations: {exc}")
+        return errors
+
+    if not isinstance(data, list):
+        errors.append(
+            f"[{component_name}] ## Citations must be a JSON array, got {type(data).__name__}"
+        )
+        return errors
+
+    if len(data) == 0:
+        errors.append(f"[{component_name}] ## Citations array is empty (expected 10+)")
+        return errors
+
+    # Spot-check a sample of citations
+    import random
+
+    sample = (
+        data[:max_spot_checks]
+        if len(data) <= max_spot_checks
+        else random.sample(data, max_spot_checks)
+    )
+
+    for i, cite in enumerate(sample):
+        file_path = cite.get("file_path", "")
+        start_line = cite.get("start_line", 0)
+        end_line = cite.get("end_line", 0)
+
+        if not file_path:
+            errors.append(f"[{component_name}] Citation [{i}] missing file_path")
+            continue
+
+        # Strip /tmp/*/project/ prefix if present
+        cleaned = re.sub(r"^/tmp/[^/]+/project/", "", file_path)
+
+        full_path = repo_root / cleaned
+        if not full_path.exists():
+            errors.append(f"[{component_name}] Citation file not found: {cleaned}")
+            continue
+
+        # Check line plausibility
+        if isinstance(start_line, int) and isinstance(end_line, int):
+            if start_line < 1 or end_line < start_line:
+                errors.append(
+                    f"[{component_name}] Invalid line range {start_line}-{end_line} "
+                    f"in {cleaned}"
+                )
+            else:
+                # Check against actual file length
+                try:
+                    line_count = sum(
+                        1 for _ in open(full_path, encoding="utf-8", errors="replace")
+                    )
+                    if start_line > line_count:
+                        errors.append(
+                            f"[{component_name}] Citation start_line {start_line} > "
+                            f"file length {line_count} in {cleaned}"
+                        )
+                except OSError:
+                    pass  # Skip if we can't read the file
 
     return errors

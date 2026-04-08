@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 # Diff logic
 # ---------------------------------------------------------------------------
 
+
 def load_manifest(artifacts_dir: Path) -> dict | None:
     """Load manifest.json from an existing artifacts directory."""
     manifest_path = artifacts_dir / "manifest.json"
@@ -171,6 +172,7 @@ def compute_diff_context(
 # Prompt construction
 # ---------------------------------------------------------------------------
 
+
 def build_analysis_prompt(
     repo_path: Path,
     service_name: str,
@@ -246,6 +248,7 @@ def build_analysis_prompt(
 # ---------------------------------------------------------------------------
 # Headless analysis
 # ---------------------------------------------------------------------------
+
 
 async def analyze(
     repo_path: str,
@@ -415,7 +418,9 @@ async def analyze(
 
     lead_agent_prompt = load_prompt("lead_agent.txt")
     base_code_analyzer_prompt = load_prompt("code_analyzer.txt")
-    architecture_documenter_prompt = load_prompt("subagents/architecture_documenter.txt")
+    architecture_documenter_prompt = load_prompt(
+        "subagents/architecture_documenter.txt"
+    )
     external_service_analyzer_prompt = load_prompt(
         "subagents/external_service_analyzer.txt"
     )
@@ -498,12 +503,8 @@ async def analyze(
     }
 
     hooks = {
-        "PreToolUse": [
-            HookMatcher(matcher=None, hooks=[tracker.pre_tool_use_hook])
-        ],
-        "PostToolUse": [
-            HookMatcher(matcher=None, hooks=[tracker.post_tool_use_hook])
-        ],
+        "PreToolUse": [HookMatcher(matcher=None, hooks=[tracker.pre_tool_use_hook])],
+        "PostToolUse": [HookMatcher(matcher=None, hooks=[tracker.post_tool_use_hook])],
         "SubagentStop": [
             HookMatcher(matcher=None, hooks=[tracker.post_subagent_stop_hook])
         ],
@@ -562,8 +563,47 @@ async def analyze(
     # Copy artifacts from /tmp/{service_name}/ to output_dir
     tmp_artifacts = Path(f"/tmp/{service_name}")
     if not tmp_artifacts.exists():
-        print(f"Warning: expected output at {tmp_artifacts} but not found", file=sys.stderr)
+        print(
+            f"Warning: expected output at {tmp_artifacts} but not found",
+            file=sys.stderr,
+        )
         sys.exit(1)
+
+    # ---------------------------------------------------------------
+    # Post-analysis: Extract structured citations from Markdown
+    # ---------------------------------------------------------------
+    from agent.utils.citation_extractor import build_citations_index
+
+    analyses_dir = tmp_artifacts / "service_analyses"
+    if analyses_dir.exists():
+        print("\nExtracting citations from analysis files...")
+
+        # Load manifest for source_repo/source_commit if available
+        manifest_data = load_manifest(tmp_artifacts)
+        cite_source_repo = ""
+        cite_source_commit = ""
+        if manifest_data:
+            cite_source_repo = manifest_data.get("source_repo", "")
+            cite_source_commit = manifest_data.get("source_commit", "")
+
+        # The project source is at /tmp/{service_name}/project/
+        project_root = tmp_artifacts / "project"
+        cite_repo_root = project_root if project_root.exists() else None
+
+        cite_index = build_citations_index(
+            analyses_dir=analyses_dir,
+            repo_root=cite_repo_root,
+            source_repo=cite_source_repo,
+            source_commit=cite_source_commit,
+        )
+
+        meta = cite_index.get("metadata", {})
+        total = meta.get("total_citations", 0)
+        components = meta.get("components_with_citations", 0)
+        errors = meta.get("total_validation_errors", 0)
+        print(f"  Extracted {total} citations across {components} components")
+        if errors:
+            print(f"  ({errors} validation warnings)")
 
     print(f"\nCopying artifacts from {tmp_artifacts} to {output}...")
     output.mkdir(parents=True, exist_ok=True)
@@ -595,6 +635,7 @@ async def analyze(
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
+
 
 def main():
     """CLI entry point for headless analysis."""

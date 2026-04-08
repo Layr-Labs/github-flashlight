@@ -15,6 +15,7 @@ from pathlib import Path
 # Component taxonomy
 # ---------------------------------------------------------------------------
 
+
 class ComponentKind(str, Enum):
     """Classification of a component's role in the codebase.
 
@@ -22,14 +23,14 @@ class ComponentKind(str, Enum):
     UNKNOWN components are classified later by LLM analysis.
     """
 
-    LIBRARY = "library"        # Reusable code, no entrypoint
-    SERVICE = "service"        # Long-running process (HTTP, gRPC, daemon)
-    CLI = "cli"                # Command-line tool
-    CONTRACT = "contract"      # Smart contract, API definition, schema
-    INFRA = "infra"            # IaC, deployment config (Terraform, Helm, K8s)
-    PIPELINE = "pipeline"      # Data pipeline, workflow definition (Airflow, dbt)
-    FRONTEND = "frontend"      # UI application (React, Vue, etc.)
-    UNKNOWN = "unknown"        # Could not classify deterministically
+    LIBRARY = "library"  # Reusable code, no entrypoint
+    SERVICE = "service"  # Long-running process (HTTP, gRPC, daemon)
+    CLI = "cli"  # Command-line tool
+    CONTRACT = "contract"  # Smart contract, API definition, schema
+    INFRA = "infra"  # IaC, deployment config (Terraform, Helm, K8s)
+    PIPELINE = "pipeline"  # Data pipeline, workflow definition (Airflow, dbt)
+    FRONTEND = "frontend"  # UI application (React, Vue, etc.)
+    UNKNOWN = "unknown"  # Could not classify deterministically
 
     @classmethod
     def from_str(cls, value: str) -> "ComponentKind":
@@ -62,12 +63,15 @@ class LanguageType(str, Enum):
 # Supporting types (unchanged)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CodeCitation:
     """Represents a traceable link from an analysis claim to a specific source code location.
 
     Code citations provide provenance for analysis findings, linking each claim
     or observation back to the exact file and line range where it was observed.
+    This enables RAG systems to return verifiable, clickable references alongside
+    analysis prose.
     """
 
     file_path: str  # Relative path from repo root (e.g., "src/auth/handler.rs")
@@ -106,6 +110,58 @@ class CodeCitation:
             return f"`{self.file_path}:{self.start_line}`"
         return f"`{self.file_path}:{self.start_line}-{self.end_line}`"
 
+    def to_markdown_link(self, source_url: str = "", commit: str = "") -> str:
+        """Render as a clickable markdown link if source_url is available.
+
+        Args:
+            source_url: Base URL of the repository (e.g., "https://github.com/org/repo").
+            commit: Git commit hash for permalink stability.
+
+        Returns:
+            Markdown link like ``[`file.rs:10-20`](https://github.com/org/repo/blob/abc123/file.rs#L10-L20)``
+            or plain ``file.rs:10-20`` if no source_url is provided.
+        """
+        label = self.to_markdown()
+        url = self.source_url(source_url, commit)
+        if url:
+            return f"[{label}]({url})"
+        return label
+
+    def source_url(self, base_url: str = "", commit: str = "") -> str:
+        """Compose a deep link to the exact source location on a git forge.
+
+        Supports GitHub, GitLab, and Bitbucket URL conventions.
+
+        Args:
+            base_url: Repository URL (e.g., "https://github.com/org/repo").
+                      Trailing slashes are stripped automatically.
+            commit: Git commit SHA for permalinks. Falls back to "HEAD" if empty.
+
+        Returns:
+            Full URL with line anchors, or empty string if base_url is empty.
+        """
+        if not base_url:
+            return ""
+
+        base = base_url.rstrip("/")
+        ref = commit or "HEAD"
+
+        # Detect forge type from URL
+        if "gitlab" in base.lower():
+            # GitLab: /blob/{ref}/{path}#L{start}-{end}
+            line_anchor = f"#L{self.start_line}-{self.end_line}"
+        elif "bitbucket" in base.lower():
+            # Bitbucket: /src/{ref}/{path}#lines-{start}:{end}
+            return f"{base}/src/{ref}/{self.file_path}#lines-{self.start_line}:{self.end_line}"
+        else:
+            # GitHub (default): /blob/{ref}/{path}#L{start}-L{end}
+            if self.start_line == self.end_line:
+                line_anchor = f"#L{self.start_line}"
+            else:
+                line_anchor = f"#L{self.start_line}-L{self.end_line}"
+
+        return f"{base}/blob/{ref}/{self.file_path}{line_anchor}"
+
 
 @dataclass
 class ExternalDependency:
@@ -141,6 +197,7 @@ class ExternalDependency:
 # ---------------------------------------------------------------------------
 # Unified Component
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Component:
@@ -227,9 +284,7 @@ class Component:
             ],
             key_files=data.get("key_files", []),
             metadata=data.get("metadata", {}),
-            citations=[
-                CodeCitation.from_dict(c) for c in data.get("citations", [])
-            ],
+            citations=[CodeCitation.from_dict(c) for c in data.get("citations", [])],
             libraries_used=data.get("libraries_used", []),
             internal_applications=data.get("internal_applications", []),
         )
@@ -251,6 +306,7 @@ class Component:
 # ---------------------------------------------------------------------------
 # Backward compatibility: Library and Application as thin wrappers
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class BaseComponent:
@@ -298,10 +354,13 @@ class Library(BaseComponent):
             name=data["name"],
             type=data["type"],
             root_path=Path(data["root_path"]),
-            manifest_path=Path(data["manifest_path"]) if data.get("manifest_path") else None,
+            manifest_path=Path(data["manifest_path"])
+            if data.get("manifest_path")
+            else None,
             description=data.get("description", ""),
             external_dependencies=[
-                ExternalDependency.from_dict(d) for d in data.get("external_dependencies", [])
+                ExternalDependency.from_dict(d)
+                for d in data.get("external_dependencies", [])
             ],
             internal_dependencies=data.get("internal_dependencies", []),
             key_files=[Path(f) for f in data.get("key_files", [])],
@@ -361,10 +420,13 @@ class Application(BaseComponent):
             name=data["name"],
             type=data["type"],
             root_path=Path(data["root_path"]),
-            manifest_path=Path(data["manifest_path"]) if data.get("manifest_path") else None,
+            manifest_path=Path(data["manifest_path"])
+            if data.get("manifest_path")
+            else None,
             description=data.get("description", ""),
             external_dependencies=[
-                ExternalDependency.from_dict(d) for d in data.get("external_dependencies", [])
+                ExternalDependency.from_dict(d)
+                for d in data.get("external_dependencies", [])
             ],
             libraries_used=data.get("libraries_used", []),
             internal_applications=data.get("internal_applications", []),
