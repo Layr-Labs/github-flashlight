@@ -26,26 +26,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
-
 from agent.discovery.engine import discover_components
 from agent.discovery.validator import validate_discovery, validate_graph
 from agent.schemas.core import Component, ComponentKind
 from agent.schemas.dependency_graph import DependencyGraph
-
-from claude_agent_sdk import (
-    ClaudeSDKClient,
-    ClaudeAgentOptions,
-    AgentDefinition,
-    HookMatcher,
-)
-
-from agent.utils.subagent_tracker import SubagentTracker
-from agent.utils.transcript import setup_session, TranscriptWriter
-from agent.utils.message_handler import process_assistant_message
-from agent.utils.template_loader import TemplateLoader
-
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -277,6 +261,22 @@ async def analyze(
         last_sha: Previous commit SHA (from manifest). Empty for full analysis.
         head_sha: Current commit SHA being analyzed.
     """
+    # Late imports: these require claude-agent-sdk and other heavy deps
+    # that aren't needed for discovery/diff logic (and may not be installed in CI).
+    from dotenv import load_dotenv
+    from claude_agent_sdk import (
+        ClaudeSDKClient,
+        ClaudeAgentOptions,
+        AgentDefinition,
+        HookMatcher,
+    )
+    from agent.utils.subagent_tracker import SubagentTracker
+    from agent.utils.transcript import setup_session, TranscriptWriter
+    from agent.utils.message_handler import process_assistant_message
+    from agent.utils.template_loader import TemplateLoader
+
+    load_dotenv()
+
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("Error: ANTHROPIC_API_KEY not found.", file=sys.stderr)
         sys.exit(1)
