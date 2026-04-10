@@ -1,0 +1,584 @@
+{
+  "graph_type": "library_dependencies",
+  "nodes": [
+    {
+      "id": "clients",
+      "type": "go-module",
+      "classification": "library",
+      "phase": 1
+    },
+    {
+      "id": "api",
+      "type": "go-module",
+      "classification": "library",
+      "phase": 2
+    },
+    {
+      "id": "common",
+      "type": "go-module",
+      "classification": "library",
+      "phase": 2
+    },
+    {
+      "id": "core",
+      "type": "go-module",
+      "classification": "library",
+      "phase": 2
+    },
+    {
+      "id": "crypto",
+      "type": "go-module",
+      "classification": "library",
+      "phase": 1
+    },
+    {
+      "id": "disperser",
+      "type": "go-module",
+      "classification": "library",
+      "phase": 2
+    },
+    {
+      "id": "ejector",
+      "type": "go-module",
+      "classification": "library",
+      "phase": 2
+    },
+    {
+      "id": "encoding",
+      "type": "go-module",
+      "classification": "library",
+      "phase": 2
+    },
+    {
+      "id": "indexer",
+      "type": "go-module",
+      "classification": "library",
+      "phase": 2
+    },
+    {
+      "id": "litt",
+      "type": "go-module",
+      "classification": "library",
+      "phase": 2
+    },
+    {
+      "id": "node",
+      "type": "go-module",
+      "classification": "library",
+      "phase": 2
+    },
+    {
+      "id": "operators",
+      "type": "go-module",
+      "classification": "library",
+      "phase": 2
+    },
+    {
+      "id": "relay",
+      "type": "go-module",
+      "classification": "library",
+      "phase": 2
+    },
+    {
+      "id": "retriever",
+      "type": "go-module",
+      "classification": "library",
+      "phase": 2
+    },
+    {
+      "id": "@eigenda/contracts",
+      "type": "javascript-package",
+      "classification": "library",
+      "phase": 1,
+      "external_dependencies": [
+        {
+          "name": "@openzeppelin/contracts",
+          "version": "4.7.0"
+        },
+        {
+          "name": "@openzeppelin/contracts-upgradeable",
+          "version": "4.7.0"
+        }
+      ]
+    },
+    {
+      "id": "eigenda-batch-metadata",
+      "type": "typescript-package",
+      "classification": "library",
+      "phase": 1
+    },
+    {
+      "id": "eigenda-operator-state",
+      "type": "typescript-package",
+      "classification": "library",
+      "phase": 1
+    },
+    {
+      "id": "eigenda-payments",
+      "type": "typescript-package",
+      "classification": "library",
+      "phase": 1,
+      "external_dependencies": [
+        {
+          "name": "@graphprotocol/graph-cli",
+          "version": "0.97.1"
+        },
+        {
+          "name": "@graphprotocol/graph-ts",
+          "version": "0.37.0"
+        }
+      ]
+    },
+    {
+      "id": "eigenda-subgraphs",
+      "type": "typescript-package",
+      "classification": "library",
+      "phase": 1,
+      "external_dependencies": [
+        {
+          "name": "@graphprotocol/graph-cli",
+          "version": "0.51.0"
+        },
+        {
+          "name": "@graphprotocol/graph-ts",
+          "version": "0.32.0"
+        }
+      ]
+    },
+    {
+      "id": "eigenda-ethereum",
+      "type": "rust-crate",
+      "classification": "library",
+      "phase": 2,
+      "external_dependencies": [
+        {
+          "name": "alloy-consensus"
+        },
+        {
+          "name": "alloy-contract"
+        },
+        {
+          "name": "alloy-primitives"
+        },
+        {
+          "name": "alloy-provider"
+        },
+        {
+          "name": "alloy-rpc-client"
+        },
+        {
+          "name": "alloy-rpc-types-eth"
+        },
+        {
+          "name": "alloy-signer-local"
+        },
+        {
+          "name": "alloy-sol-types"
+        },
+        {
+          "name": "alloy-transport"
+        },
+        {
+          "name": "reth-trie-common"
+        },
+        {
+          "name": "futures"
+        },
+        {
+          "name": "rustls"
+        },
+        {
+          "name": "schemars"
+        },
+        {
+          "name": "serde"
+        },
+        {
+          "name": "tracing"
+        }
+      ]
+    },
+    {
+      "id": "eigenda-verification",
+      "type": "rust-crate",
+      "classification": "library",
+      "phase": 2,
+      "external_dependencies": [
+        {
+          "name": "alloy-consensus"
+        },
+        {
+          "name": "alloy-primitives"
+        },
+        {
+          "name": "alloy-rlp"
+        },
+        {
+          "name": "alloy-sol-types"
+        },
+        {
+          "name": "ark-bn254"
+        },
+        {
+          "name": "ark-ec"
+        },
+        {
+          "name": "ark-ff"
+        },
+        {
+          "name": "bitvec",
+          "version": "1.0.1"
+        },
+        {
+          "name": "bytes"
+        },
+        {
+          "name": "derive_more"
+        },
+        {
+          "name": "hashbrown"
+        },
+        {
+          "name": "hex"
+        },
+        {
+          "name": "proptest"
+        },
+        {
+          "name": "reth-trie-common"
+        },
+        {
+          "name": "rust-kzg-bn254-primitives"
+        },
+        {
+          "name": "rust-kzg-bn254-prover"
+        },
+        {
+          "name": "serde"
+        },
+        {
+          "name": "thiserror"
+        },
+        {
+          "name": "tracing"
+        }
+      ]
+    },
+    {
+      "id": "eigenda-srs-data",
+      "type": "rust-crate",
+      "classification": "library",
+      "phase": 1,
+      "external_dependencies": [
+        {
+          "name": "ark-bn254"
+        },
+        {
+          "name": "rust-kzg-bn254-prover"
+        }
+      ]
+    },
+    {
+      "id": "eigenda-proxy",
+      "type": "rust-crate",
+      "classification": "library",
+      "phase": 2,
+      "external_dependencies": [
+        {
+          "name": "backon"
+        },
+        {
+          "name": "bytes"
+        },
+        {
+          "name": "hex"
+        },
+        {
+          "name": "reqwest",
+          "version": "0.12.22"
+        },
+        {
+          "name": "serde"
+        },
+        {
+          "name": "thiserror"
+        },
+        {
+          "name": "tokio"
+        },
+        {
+          "name": "tracing"
+        },
+        {
+          "name": "url",
+          "version": "2.5.4"
+        },
+        {
+          "name": "schemars"
+        }
+      ]
+    },
+    {
+      "id": "eigenda-tests",
+      "type": "rust-crate",
+      "classification": "library",
+      "phase": 1
+    }
+  ],
+  "edges": [
+    {
+      "from": "api",
+      "to": "common"
+    },
+    {
+      "from": "api",
+      "to": "core"
+    },
+    {
+      "from": "api",
+      "to": "encoding"
+    },
+    {
+      "from": "api",
+      "to": "indexer"
+    },
+    {
+      "from": "api",
+      "to": "node"
+    },
+    {
+      "from": "common",
+      "to": "core"
+    },
+    {
+      "from": "common",
+      "to": "disperser"
+    },
+    {
+      "from": "common",
+      "to": "ejector"
+    },
+    {
+      "from": "common",
+      "to": "encoding"
+    },
+    {
+      "from": "common",
+      "to": "litt"
+    },
+    {
+      "from": "core",
+      "to": "api"
+    },
+    {
+      "from": "core",
+      "to": "common"
+    },
+    {
+      "from": "core",
+      "to": "encoding"
+    },
+    {
+      "from": "core",
+      "to": "indexer"
+    },
+    {
+      "from": "disperser",
+      "to": "api"
+    },
+    {
+      "from": "disperser",
+      "to": "common"
+    },
+    {
+      "from": "disperser",
+      "to": "core"
+    },
+    {
+      "from": "disperser",
+      "to": "encoding"
+    },
+    {
+      "from": "disperser",
+      "to": "indexer"
+    },
+    {
+      "from": "disperser",
+      "to": "operators"
+    },
+    {
+      "from": "disperser",
+      "to": "relay"
+    },
+    {
+      "from": "ejector",
+      "to": "api"
+    },
+    {
+      "from": "ejector",
+      "to": "common"
+    },
+    {
+      "from": "ejector",
+      "to": "core"
+    },
+    {
+      "from": "ejector",
+      "to": "disperser"
+    },
+    {
+      "from": "encoding",
+      "to": "api"
+    },
+    {
+      "from": "encoding",
+      "to": "common"
+    },
+    {
+      "from": "encoding",
+      "to": "core"
+    },
+    {
+      "from": "encoding",
+      "to": "crypto"
+    },
+    {
+      "from": "indexer",
+      "to": "common"
+    },
+    {
+      "from": "litt",
+      "to": "common"
+    },
+    {
+      "from": "litt",
+      "to": "core"
+    },
+    {
+      "from": "node",
+      "to": "api"
+    },
+    {
+      "from": "node",
+      "to": "common"
+    },
+    {
+      "from": "node",
+      "to": "core"
+    },
+    {
+      "from": "node",
+      "to": "encoding"
+    },
+    {
+      "from": "node",
+      "to": "litt"
+    },
+    {
+      "from": "node",
+      "to": "operators"
+    },
+    {
+      "from": "operators",
+      "to": "api"
+    },
+    {
+      "from": "operators",
+      "to": "common"
+    },
+    {
+      "from": "operators",
+      "to": "core"
+    },
+    {
+      "from": "operators",
+      "to": "indexer"
+    },
+    {
+      "from": "operators",
+      "to": "node"
+    },
+    {
+      "from": "relay",
+      "to": "api"
+    },
+    {
+      "from": "relay",
+      "to": "common"
+    },
+    {
+      "from": "relay",
+      "to": "core"
+    },
+    {
+      "from": "relay",
+      "to": "crypto"
+    },
+    {
+      "from": "relay",
+      "to": "disperser"
+    },
+    {
+      "from": "relay",
+      "to": "encoding"
+    },
+    {
+      "from": "retriever",
+      "to": "api"
+    },
+    {
+      "from": "retriever",
+      "to": "common"
+    },
+    {
+      "from": "retriever",
+      "to": "core"
+    },
+    {
+      "from": "retriever",
+      "to": "encoding"
+    },
+    {
+      "from": "eigenda-ethereum",
+      "to": "eigenda-verification"
+    },
+    {
+      "from": "eigenda-verification",
+      "to": "eigenda-srs-data"
+    },
+    {
+      "from": "eigenda-proxy",
+      "to": "eigenda-verification"
+    }
+  ],
+  "analysis_order": {
+    "phase1": [
+      "@eigenda/contracts",
+      "clients",
+      "crypto",
+      "eigenda-batch-metadata",
+      "eigenda-operator-state",
+      "eigenda-payments",
+      "eigenda-srs-data",
+      "eigenda-subgraphs",
+      "eigenda-tests"
+    ],
+    "phase2": [
+      "api",
+      "common",
+      "core",
+      "disperser",
+      "eigenda-verification",
+      "ejector",
+      "encoding",
+      "indexer",
+      "litt",
+      "node",
+      "operators",
+      "relay",
+      "eigenda-ethereum",
+      "eigenda-proxy",
+      "retriever"
+    ]
+  }
+}

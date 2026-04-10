@@ -1,0 +1,184 @@
+{
+  "applications": [
+    {
+      "name": "api-server",
+      "kind": "service",
+      "type": "go-module",
+      "classification": "application",
+      "root_path": "api/proxy/cmd/server",
+      "description": "",
+      "internal_dependencies": [
+        "api",
+        "common"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "disperser-apiserver",
+      "kind": "service",
+      "type": "go-module",
+      "classification": "application",
+      "root_path": "disperser/cmd/apiserver",
+      "description": "",
+      "internal_dependencies": [
+        "api",
+        "common",
+        "core",
+        "disperser",
+        "encoding"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "disperser-batcher",
+      "kind": "service",
+      "type": "go-module",
+      "classification": "application",
+      "root_path": "disperser/cmd/batcher",
+      "description": "",
+      "internal_dependencies": [
+        "common",
+        "core",
+        "disperser",
+        "encoding",
+        "indexer"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "disperser-blobapi",
+      "kind": "service",
+      "type": "go-module",
+      "classification": "application",
+      "root_path": "disperser/cmd/blobapi",
+      "description": "",
+      "internal_dependencies": [
+        "disperser",
+        "relay"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "disperser-controller",
+      "kind": "service",
+      "type": "go-module",
+      "classification": "application",
+      "root_path": "disperser/cmd/controller",
+      "description": "",
+      "internal_dependencies": [
+        "api",
+        "common",
+        "core",
+        "disperser",
+        "indexer"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "disperser-dataapi",
+      "kind": "service",
+      "type": "go-module",
+      "classification": "application",
+      "root_path": "disperser/cmd/dataapi",
+      "description": "",
+      "internal_dependencies": [
+        "common",
+        "core",
+        "disperser"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "disperser-encoder",
+      "kind": "service",
+      "type": "go-module",
+      "classification": "application",
+      "root_path": "disperser/cmd/encoder",
+      "description": "",
+      "internal_dependencies": [
+        "common",
+        "disperser",
+        "encoding",
+        "relay"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "core",
+      "kind": "contract",
+      "type": "solidity-contract",
+      "classification": "application",
+      "root_path": "contracts/src/core",
+      "description": "",
+      "internal_dependencies": [],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "contracts/foundry.toml",
+      "metadata": {
+        "declarations": {
+          "abstract contract": 6,
+          "contract": 9,
+          "interface": 11,
+          "library": 11
+        }
+      }
+    },
+    {
+      "name": "integrations",
+      "kind": "contract",
+      "type": "solidity-contract",
+      "classification": "application",
+      "root_path": "contracts/src/integrations",
+      "description": "",
+      "internal_dependencies": [
+        "core"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "contracts/foundry.toml",
+      "metadata": {
+        "declarations": {
+          "contract": 5,
+          "library": 4,
+          "interface": 6
+        }
+      }
+    },
+    {
+      "name": "periphery",
+      "kind": "contract",
+      "type": "solidity-contract",
+      "classification": "application",
+      "root_path": "contracts/src/periphery",
+      "description": "",
+      "internal_dependencies": [
+        "core"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "contracts/foundry.toml",
+      "metadata": {
+        "declarations": {
+          "contract": 1,
+          "interface": 1,
+          "library": 3,
+          "abstract contract": 1
+        }
+      }
+    }
+  ]
+}

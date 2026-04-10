@@ -1,0 +1,187 @@
+{
+  "graph_type": "application_interactions",
+  "nodes": [
+    {
+      "id": "api-server",
+      "type": "go-module",
+      "classification": "application",
+      "description": "EigenDA Proxy HTTP/RPC sidecar for rollups (Optimism ALT-DA + Arbitrum Nitro Custom DA interfaces)",
+      "libraries_used": ["api", "common", "clients"],
+      "external_dependencies": ["aws-s3", "ethereum-rpc"],
+      "internal_applications": ["disperser-apiserver", "relay"],
+      "key_files": ["api/proxy/cmd/server/entrypoint.go"]
+    },
+    {
+      "id": "disperser-apiserver",
+      "type": "go-module",
+      "classification": "application",
+      "description": "Primary external-facing gRPC ingest for v2 blob dispersal (DispersalServerV2)",
+      "libraries_used": ["api", "common", "core", "disperser", "encoding"],
+      "external_dependencies": ["aws-s3", "aws-dynamodb", "ethereum-rpc"],
+      "internal_applications": ["disperser-controller", "disperser-encoder"],
+      "key_files": ["disperser/cmd/apiserver/lib/apiserver.go", "disperser/apiserver/server_v2.go"]
+    },
+    {
+      "id": "disperser-batcher",
+      "type": "go-module",
+      "classification": "application",
+      "description": "v1 legacy pipeline orchestrator: encodes, disperses to DA nodes, aggregates BLS sigs, submits on-chain confirmBatch",
+      "libraries_used": ["common", "core", "disperser", "encoding", "indexer"],
+      "external_dependencies": ["aws-s3", "aws-dynamodb", "aws-kms", "ethereum-rpc", "thegraph"],
+      "internal_applications": ["disperser-encoder"],
+      "key_files": ["disperser/cmd/batcher/main.go", "disperser/batcher/batcher.go"]
+    },
+    {
+      "id": "disperser-blobapi",
+      "type": "go-module",
+      "classification": "application",
+      "description": "Combined binary co-hosting DispersalServerV2 + Relay in one process for simplified cloud deployment",
+      "libraries_used": ["disperser", "relay"],
+      "external_dependencies": ["aws-s3", "aws-dynamodb", "ethereum-rpc", "thegraph"],
+      "internal_applications": ["disperser-controller"],
+      "key_files": ["disperser/cmd/blobapi/main.go"]
+    },
+    {
+      "id": "disperser-controller",
+      "type": "go-module",
+      "classification": "application",
+      "description": "v2 control-plane orchestrator: EncodingManager, batch assembly, StoreChunks fan-out, BLS aggregation, payment authorization gRPC",
+      "libraries_used": ["api", "common", "core", "disperser", "indexer"],
+      "external_dependencies": ["aws-dynamodb", "ethereum-rpc", "thegraph"],
+      "internal_applications": ["disperser-encoder"],
+      "key_files": ["disperser/cmd/controller/main.go", "disperser/controller/controller.go"]
+    },
+    {
+      "id": "disperser-dataapi",
+      "type": "go-module",
+      "classification": "application",
+      "description": "Read-only observability HTTP API (Gin) for blobs, batches, operator stats, payments, throughput metrics",
+      "libraries_used": ["common", "core", "disperser"],
+      "external_dependencies": ["aws-dynamodb", "ethereum-rpc", "thegraph", "prometheus"],
+      "internal_applications": [],
+      "key_files": ["disperser/cmd/dataapi/main.go", "disperser/dataapi/v2/server_v2.go"]
+    },
+    {
+      "id": "disperser-encoder",
+      "type": "go-module",
+      "classification": "application",
+      "description": "Standalone KZG/RS encoding gRPC service; v1 inline encoding, v2 S3 fetch-encode-store with GPU/Icicle support",
+      "libraries_used": ["common", "disperser", "encoding", "relay"],
+      "external_dependencies": ["aws-s3"],
+      "internal_applications": [],
+      "key_files": ["disperser/cmd/encoder/main.go", "disperser/encoder/server_v2.go"]
+    },
+    {
+      "id": "core",
+      "type": "solidity-contract",
+      "classification": "application",
+      "description": "Core EigenDA on-chain contracts: EigenDAServiceManager, PaymentVault, EigenDADirectory, EigenDAThresholdRegistry, relay/disperser registries",
+      "libraries_used": [],
+      "external_dependencies": ["eigenlayer-contracts", "openzeppelin"],
+      "internal_applications": [],
+      "key_files": [
+        "contracts/src/core/EigenDAServiceManager.sol",
+        "contracts/src/core/PaymentVault.sol",
+        "contracts/src/core/EigenDADirectory.sol",
+        "contracts/src/core/EigenDAThresholdRegistry.sol"
+      ]
+    },
+    {
+      "id": "integrations",
+      "type": "solidity-contract",
+      "classification": "application",
+      "description": "Versioned cert verifier adapters (V1/V2/V4) and EigenDACertVerifierRouter with ABN-based dispatch",
+      "libraries_used": [],
+      "external_dependencies": ["openzeppelin"],
+      "internal_applications": ["core"],
+      "key_files": [
+        "contracts/src/integrations/cert/EigenDACertVerifier.sol",
+        "contracts/src/integrations/cert/router/EigenDACertVerifierRouter.sol"
+      ]
+    },
+    {
+      "id": "periphery",
+      "type": "solidity-contract",
+      "classification": "application",
+      "description": "EigenDAEjectionManager: three-phase optimistic operator ejection (start/cancel/complete) with BLS self-cancel",
+      "libraries_used": [],
+      "external_dependencies": [],
+      "internal_applications": ["core"],
+      "key_files": ["contracts/src/periphery/ejection/EigenDAEjectionManager.sol"]
+    }
+  ],
+  "edges": [
+    {
+      "from": "api-server",
+      "to": "disperser-apiserver",
+      "type": "grpc",
+      "label": "DisperseBlob (v2 gRPC)"
+    },
+    {
+      "from": "api-server",
+      "to": "relay",
+      "type": "grpc",
+      "label": "GetBlob / GetChunks"
+    },
+    {
+      "from": "api-server",
+      "to": "integrations",
+      "type": "eth-call",
+      "label": "checkDACert (cert verification)"
+    },
+    {
+      "from": "disperser-apiserver",
+      "to": "disperser-controller",
+      "type": "grpc",
+      "label": "AuthorizePayment"
+    },
+    {
+      "from": "disperser-controller",
+      "to": "disperser-encoder",
+      "type": "grpc",
+      "label": "EncodeBlob (v2)"
+    },
+    {
+      "from": "disperser-controller",
+      "to": "da-nodes",
+      "type": "grpc",
+      "label": "StoreChunks fan-out"
+    },
+    {
+      "from": "disperser-batcher",
+      "to": "disperser-encoder",
+      "type": "grpc",
+      "label": "EncodeBlob (v1)"
+    },
+    {
+      "from": "disperser-batcher",
+      "to": "da-nodes",
+      "type": "grpc",
+      "label": "StoreChunks (v1)"
+    },
+    {
+      "from": "disperser-batcher",
+      "to": "core",
+      "type": "eth-tx",
+      "label": "confirmBatch"
+    },
+    {
+      "from": "disperser-blobapi",
+      "to": "disperser-controller",
+      "type": "grpc",
+      "label": "AuthorizePayment"
+    },
+    {
+      "from": "integrations",
+      "to": "core",
+      "type": "contract-call",
+      "label": "BLS signature verification, threshold queries"
+    },
+    {
+      "from": "periphery",
+      "to": "core",
+      "type": "contract-call",
+      "label": "AccessControl, BLSApkRegistry, RegistryCoordinator"
+    }
+  ]
+}

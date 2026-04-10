@@ -1,0 +1,535 @@
+{
+  "libraries": [
+    {
+      "name": "clients",
+      "kind": "library",
+      "type": "go-module",
+      "classification": "library",
+      "root_path": "api/proxy/clients",
+      "description": "",
+      "internal_dependencies": [],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "api/proxy/clients/go.mod"
+    },
+    {
+      "name": "api",
+      "kind": "library",
+      "type": "go-module",
+      "classification": "library",
+      "root_path": "api",
+      "description": "",
+      "internal_dependencies": [
+        "common",
+        "core",
+        "encoding",
+        "indexer",
+        "node"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "common",
+      "kind": "library",
+      "type": "go-module",
+      "classification": "library",
+      "root_path": "common",
+      "description": "",
+      "internal_dependencies": [
+        "core",
+        "disperser",
+        "ejector",
+        "encoding",
+        "litt"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "core",
+      "kind": "library",
+      "type": "go-module",
+      "classification": "library",
+      "root_path": "core",
+      "description": "",
+      "internal_dependencies": [
+        "api",
+        "common",
+        "encoding",
+        "indexer"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "crypto",
+      "kind": "library",
+      "type": "go-module",
+      "classification": "library",
+      "root_path": "crypto",
+      "description": "",
+      "internal_dependencies": [],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "disperser",
+      "kind": "library",
+      "type": "go-module",
+      "classification": "library",
+      "root_path": "disperser",
+      "description": "",
+      "internal_dependencies": [
+        "api",
+        "common",
+        "core",
+        "encoding",
+        "indexer",
+        "operators",
+        "relay"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "ejector",
+      "kind": "library",
+      "type": "go-module",
+      "classification": "library",
+      "root_path": "ejector",
+      "description": "",
+      "internal_dependencies": [
+        "api",
+        "common",
+        "core",
+        "disperser"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "encoding",
+      "kind": "library",
+      "type": "go-module",
+      "classification": "library",
+      "root_path": "encoding",
+      "description": "",
+      "internal_dependencies": [
+        "api",
+        "common",
+        "core",
+        "crypto"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "indexer",
+      "kind": "library",
+      "type": "go-module",
+      "classification": "library",
+      "root_path": "indexer",
+      "description": "",
+      "internal_dependencies": [
+        "common"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "litt",
+      "kind": "library",
+      "type": "go-module",
+      "classification": "library",
+      "root_path": "litt",
+      "description": "",
+      "internal_dependencies": [
+        "common",
+        "core"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "node",
+      "kind": "library",
+      "type": "go-module",
+      "classification": "library",
+      "root_path": "node",
+      "description": "",
+      "internal_dependencies": [
+        "api",
+        "common",
+        "core",
+        "encoding",
+        "litt",
+        "operators"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "operators",
+      "kind": "library",
+      "type": "go-module",
+      "classification": "library",
+      "root_path": "operators",
+      "description": "",
+      "internal_dependencies": [
+        "api",
+        "common",
+        "core",
+        "indexer",
+        "node"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "relay",
+      "kind": "library",
+      "type": "go-module",
+      "classification": "library",
+      "root_path": "relay",
+      "description": "",
+      "internal_dependencies": [
+        "api",
+        "common",
+        "core",
+        "crypto",
+        "disperser",
+        "encoding"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "retriever",
+      "kind": "library",
+      "type": "go-module",
+      "classification": "library",
+      "root_path": "retriever",
+      "description": "",
+      "internal_dependencies": [
+        "api",
+        "common",
+        "core",
+        "encoding"
+      ],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "go.mod"
+    },
+    {
+      "name": "@eigenda/contracts",
+      "kind": "library",
+      "type": "javascript-package",
+      "classification": "library",
+      "root_path": "contracts",
+      "description": "EigenDA core contracts",
+      "internal_dependencies": [],
+      "external_dependencies": [
+        {
+          "name": "@openzeppelin/contracts",
+          "version": "4.7.0"
+        },
+        {
+          "name": "@openzeppelin/contracts-upgradeable",
+          "version": "4.7.0"
+        }
+      ],
+      "key_files": [],
+      "manifest_path": "contracts/package.json"
+    },
+    {
+      "name": "eigenda-batch-metadata",
+      "kind": "library",
+      "type": "typescript-package",
+      "classification": "library",
+      "root_path": "subgraphs/eigenda-batch-metadata",
+      "description": "",
+      "internal_dependencies": [],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "subgraphs/eigenda-batch-metadata/package.json"
+    },
+    {
+      "name": "eigenda-operator-state",
+      "kind": "library",
+      "type": "typescript-package",
+      "classification": "library",
+      "root_path": "subgraphs/eigenda-operator-state",
+      "description": "",
+      "internal_dependencies": [],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "subgraphs/eigenda-operator-state/package.json"
+    },
+    {
+      "name": "eigenda-payments",
+      "kind": "library",
+      "type": "typescript-package",
+      "classification": "library",
+      "root_path": "subgraphs/eigenda-payments",
+      "description": "",
+      "internal_dependencies": [],
+      "external_dependencies": [
+        {
+          "name": "@graphprotocol/graph-cli",
+          "version": "0.97.1"
+        },
+        {
+          "name": "@graphprotocol/graph-ts",
+          "version": "0.37.0"
+        }
+      ],
+      "key_files": [],
+      "manifest_path": "subgraphs/eigenda-payments/package.json"
+    },
+    {
+      "name": "eigenda-subgraphs",
+      "kind": "library",
+      "type": "typescript-package",
+      "classification": "library",
+      "root_path": "subgraphs",
+      "description": "",
+      "internal_dependencies": [],
+      "external_dependencies": [
+        {
+          "name": "@graphprotocol/graph-cli",
+          "version": "0.51.0"
+        },
+        {
+          "name": "@graphprotocol/graph-ts",
+          "version": "0.32.0"
+        }
+      ],
+      "key_files": [],
+      "manifest_path": "subgraphs/package.json"
+    },
+    {
+      "name": "eigenda-ethereum",
+      "kind": "library",
+      "type": "rust-crate",
+      "classification": "library",
+      "root_path": "rust/crates/eigenda-ethereum",
+      "description": "",
+      "internal_dependencies": [
+        "eigenda-verification"
+      ],
+      "external_dependencies": [
+        {
+          "name": "alloy-consensus"
+        },
+        {
+          "name": "alloy-contract"
+        },
+        {
+          "name": "alloy-primitives"
+        },
+        {
+          "name": "alloy-provider"
+        },
+        {
+          "name": "alloy-rpc-client"
+        },
+        {
+          "name": "alloy-rpc-types-eth"
+        },
+        {
+          "name": "alloy-signer-local"
+        },
+        {
+          "name": "alloy-sol-types"
+        },
+        {
+          "name": "alloy-transport"
+        },
+        {
+          "name": "reth-trie-common"
+        },
+        {
+          "name": "futures"
+        },
+        {
+          "name": "rustls"
+        },
+        {
+          "name": "schemars"
+        },
+        {
+          "name": "serde"
+        },
+        {
+          "name": "tracing"
+        }
+      ],
+      "key_files": [],
+      "manifest_path": "rust/crates/eigenda-ethereum/Cargo.toml"
+    },
+    {
+      "name": "eigenda-verification",
+      "kind": "library",
+      "type": "rust-crate",
+      "classification": "library",
+      "root_path": "rust/crates/eigenda-verification",
+      "description": "",
+      "internal_dependencies": [
+        "eigenda-srs-data"
+      ],
+      "external_dependencies": [
+        {
+          "name": "alloy-consensus"
+        },
+        {
+          "name": "alloy-primitives"
+        },
+        {
+          "name": "alloy-rlp"
+        },
+        {
+          "name": "alloy-sol-types"
+        },
+        {
+          "name": "ark-bn254"
+        },
+        {
+          "name": "ark-ec"
+        },
+        {
+          "name": "ark-ff"
+        },
+        {
+          "name": "bitvec",
+          "version": "1.0.1"
+        },
+        {
+          "name": "bytes"
+        },
+        {
+          "name": "derive_more"
+        },
+        {
+          "name": "hashbrown"
+        },
+        {
+          "name": "hex"
+        },
+        {
+          "name": "proptest"
+        },
+        {
+          "name": "reth-trie-common"
+        },
+        {
+          "name": "rust-kzg-bn254-primitives"
+        },
+        {
+          "name": "rust-kzg-bn254-prover"
+        },
+        {
+          "name": "serde"
+        },
+        {
+          "name": "thiserror"
+        },
+        {
+          "name": "tracing"
+        }
+      ],
+      "key_files": [],
+      "manifest_path": "rust/crates/eigenda-verification/Cargo.toml"
+    },
+    {
+      "name": "eigenda-srs-data",
+      "kind": "library",
+      "type": "rust-crate",
+      "classification": "library",
+      "root_path": "rust/crates/eigenda-srs-data",
+      "description": "",
+      "internal_dependencies": [],
+      "external_dependencies": [
+        {
+          "name": "ark-bn254"
+        },
+        {
+          "name": "rust-kzg-bn254-prover"
+        }
+      ],
+      "key_files": [],
+      "manifest_path": "rust/crates/eigenda-srs-data/Cargo.toml"
+    },
+    {
+      "name": "eigenda-proxy",
+      "kind": "library",
+      "type": "rust-crate",
+      "classification": "library",
+      "root_path": "rust/crates/eigenda-proxy",
+      "description": "",
+      "internal_dependencies": [
+        "eigenda-verification"
+      ],
+      "external_dependencies": [
+        {
+          "name": "backon"
+        },
+        {
+          "name": "bytes"
+        },
+        {
+          "name": "hex"
+        },
+        {
+          "name": "reqwest",
+          "version": "0.12.22"
+        },
+        {
+          "name": "serde"
+        },
+        {
+          "name": "thiserror"
+        },
+        {
+          "name": "tokio"
+        },
+        {
+          "name": "tracing"
+        },
+        {
+          "name": "url",
+          "version": "2.5.4"
+        },
+        {
+          "name": "schemars"
+        }
+      ],
+      "key_files": [],
+      "manifest_path": "rust/crates/eigenda-proxy/Cargo.toml"
+    },
+    {
+      "name": "eigenda-tests",
+      "kind": "library",
+      "type": "rust-crate",
+      "classification": "library",
+      "root_path": "rust/crates/eigenda-tests",
+      "description": "",
+      "internal_dependencies": [],
+      "external_dependencies": [],
+      "key_files": [],
+      "manifest_path": "rust/crates/eigenda-tests/Cargo.toml"
+    }
+  ]
+}
