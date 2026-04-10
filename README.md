@@ -15,29 +15,68 @@ A sophisticated multi-agent processing pipeline using the Claude Agent SDK that 
 
 ## Component Classification
 
-GitHub Flashlight automatically classifies components as applications or libraries to help distinguish between executable services and reusable packages:
+GitHub Flashlight uses a deterministic discovery engine (zero LLM calls) to classify every component into one of eight `ComponentKind` values via language-specific plugins:
 
-### 🔷 Binaries (Services/Applications)
-Executable applications that run as independent services:
-- **Rust**: Crates with `[[bin]]` section or `src/main.rs`
-- **Python**: Packages with `[project.scripts]` or `__main__.py`
-- **Node.js**: Packages with `"bin"` field or server frameworks
+| Kind | Description |
+|------|-------------|
+| **Library** | Reusable code with no entrypoint |
+| **Service** | Long-running process (HTTP, gRPC, daemon) |
+| **CLI** | Command-line tool |
+| **Contract** | Smart contract, API definition, or schema |
+| **Infra** | Infrastructure-as-code or deployment config (Terraform, Helm, K8s) |
+| **Pipeline** | Data pipeline or workflow definition (Airflow, dbt) |
+| **Frontend** | UI application (React, Vue, Streamlit, SwiftUI) |
+| **Unknown** | Could not classify deterministically |
 
-Displayed as **rectangles (■)** in the dependency graph.
+### Supported Languages
 
-### 🟢 Libraries (Packages)
-Reusable code libraries consumed by services:
-- **Rust**: Crates with only `[lib]` section
-- **Python**: Packages without entry points
-- **Node.js**: Packages without `"bin"` field
+#### Go (`go.mod`)
+- **Service**: `main.go` or `package main` with server indicators (`listenandserve`, `grpc.newserver`, `net.listen`, etc.) or service-like names (`server`, `daemon`, `proxy`, `worker`)
+- **CLI**: `main.go` with CLI indicators (`cobra.command`, `pflag`, `os.args`) or CLI-like names (`cli`, `tool`)
+- **Library**: No `main.go`, no `package main`, or has a `cmd/` directory (executables inside `cmd/` become their own components)
+- Supports single-module monorepos with per-package discovery and Go import tracing
 
-Displayed as **circles (●)** in the dependency graph.
+#### Rust (`Cargo.toml`)
+- **Service**: `[[bin]]` or `src/main.rs` with server framework deps (`actix-web`, `axum`, `warp`, `rocket`, `tonic`, `hyper`) or service-like names
+- **CLI**: Executable with CLI framework deps (`clap`, `structopt`, `argh`) or CLI-like names
+- **Library**: `[lib]` section only, or hybrid crates with both `lib.rs` and `main.rs`
+- Supports Cargo workspaces with glob member patterns
 
-### Detection Logic
-1. **Manifest analysis**: Checks Cargo.toml, package.json, pyproject.toml for binary indicators
-2. **File structure**: Looks for `main.rs` vs `lib.rs`, `__main__.py` presence
-3. **Naming patterns**: Keywords like "server", "api" → binary; "core", "utils" → library
-4. **Default**: Classifies as "library" when uncertain
+#### Python (`pyproject.toml`)
+- **Pipeline**: Markers for `airflow`, `dagster`, `prefect`, `dbt`, `luigi`
+- **Frontend**: Markers for `streamlit`, `gradio`, `panel`, `dash`
+- **Service**: Web framework deps (`fastapi`, `flask`, `django`, `starlette`, etc.) with `[project.scripts]` or `__main__.py`
+- **CLI**: Has `[project.scripts]` or `__main__.py` without web framework deps
+- **Library**: No entry points or framework markers
+- Supports both PEP 621 and Poetry dependency formats
+
+#### TypeScript / JavaScript (`package.json`)
+- **CLI**: `"bin"` field present
+- **Frontend**: Frontend framework deps (`react`, `vue`, `svelte`, `angular`, `next`, `nuxt`, `remix`, `solid-js`, etc.)
+- **Service**: Server framework deps (`express`, `fastify`, `koa`, `nestjs`, `hono`) with a `"start"` script or `"main"` field
+- **Library**: No binary, framework, or server indicators
+- Supports npm/yarn/pnpm workspaces with recursive member discovery
+
+#### Solidity (`foundry.toml`, `hardhat.config.ts`/`.js`)
+- **Contract**: Contains `contract`, `abstract contract`, or `interface` declarations
+- **Library**: All declarations are Solidity `library` keyword
+- Supports both Foundry and Hardhat projects with import remapping and multi-package discovery
+
+#### Swift (`Package.swift`)
+- **Service**: `.executableTarget` with server framework indicators (`Vapor`, `Hummingbird`, `SwiftNIO`, `GRPC`) or service-like names
+- **Frontend**: Executable with iOS/macOS indicators (`UIApplication`, `SwiftUI`, `WindowGroup`)
+- **CLI**: `.executableTarget` with argument parsing (`ParsableCommand`, `ArgumentParser`) or CLI-like names; default for unclassified executables
+- **Library**: `.target` without `main.swift` or `@main`, `.binaryTarget`, `.systemLibrary`
+- Supports SPM multi-target packages with per-target discovery
+
+### Detection Pipeline
+1. **Manifest discovery**: Scans for language-specific manifest files (`Cargo.toml`, `go.mod`, `package.json`, `pyproject.toml`, `foundry.toml`, `Package.swift`)
+2. **Manifest analysis**: Checks for binary/entrypoint indicators in manifest structure
+3. **File structure**: Looks for `main.rs`, `main.go`, `__main__.py`, `main.swift`, `@main` attribute
+4. **Dependency scanning**: Identifies framework-specific dependencies (e.g., `axum` -> Service, `clap` -> CLI, `react` -> Frontend)
+5. **Content scanning**: Reads source files for server/CLI/UI indicators (Go reads all `.go` files; Swift reads up to 10 `.swift` files)
+6. **Name-based heuristics**: Keywords like "server", "api", "daemon" -> Service; "cli", "tool" -> CLI
+7. **Default**: Falls back to Library (or Service/CLI for executables, depending on the language)
 
 ## Architecture
 
