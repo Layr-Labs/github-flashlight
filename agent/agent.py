@@ -1,20 +1,22 @@
-"""Entry point for code analysis agent using AgentDefinition for subagents."""
+"""Entry point for interactive code analysis agent using LangGraph.
 
-import asyncio
+Replaces the claude-agent-sdk ClaudeSDKClient with a LangGraph-based
+multi-agent orchestrator. The lead agent delegates to specialized
+subagents (code-library-analyzer, application-analyzer, etc.) via the
+spawn_subagent tool, which is intercepted by the graph and run as
+an inline subgraph.
+"""
+
 import os
 import logging
 from pathlib import Path
-from dotenv import load_dotenv
-from claude_agent_sdk import (
-    ClaudeSDKClient,
-    ClaudeAgentOptions,
-    AgentDefinition,
-    HookMatcher,
-)
 
-from agent.utils.subagent_tracker import SubagentTracker
+from dotenv import load_dotenv
+from langchain_core.messages import AIMessage, HumanMessage
+
+from agent.callbacks import FlashlightCallbackHandler
+from agent.graph import build_lead_graph
 from agent.utils.transcript import setup_session, TranscriptWriter
-from agent.utils.message_handler import process_assistant_message
 from agent.utils.template_loader import TemplateLoader
 
 # Load environment variables
@@ -44,24 +46,12 @@ def load_prompt(filename: str) -> str:
         return f.read().strip()
 
 
-async def chat():
-    """Start interactive chat with the code analysis agent."""
+def _build_agent_prompts() -> dict[str, str]:
+    """Load and build all subagent system prompts.
 
-    # Check API key first, before creating any files
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("\nError: ANTHROPIC_API_KEY not found.")
-        print("Set it in a .env file or export it in your shell.")
-        print("Get your key at: https://console.anthropic.com/settings/keys\n")
-        return
-
-    # Setup session directory and transcript
-    transcript_file, session_dir = setup_session()
-
-    # Create transcript writer
-    transcript = TranscriptWriter(transcript_file)
-
-    # Load prompts
-    lead_agent_prompt = load_prompt("lead_agent.txt")
+    Returns a dict of subagent_type -> system prompt string.
+    """
+    # Load base prompts
     base_code_analyzer_prompt = load_prompt("code_analyzer.txt")
     architecture_documenter_prompt = load_prompt(
         "subagents/architecture_documenter.txt"
@@ -69,11 +59,11 @@ async def chat():
     external_service_analyzer_prompt = load_prompt(
         "subagents/external_service_analyzer.txt"
     )
+
     # Load analysis templates and enhance code analyzer prompt
     templates_dir = Path(__file__).parent.parent / "templates" / "analysis-template"
     template_loader = TemplateLoader(templates_dir)
 
-    # Build enhanced code analyzer prompt with templates
     template_instructions = template_loader.get_template_instructions()
     application_template = template_loader.get_template("application")
     package_template = template_loader.get_template("package")
@@ -91,170 +81,124 @@ async def chat():
 </package_analysis_template>
 """
 
-    # Initialize subagent tracker with transcript writer and session directory
-    tracker = SubagentTracker(
-        transcript_writer=transcript, session_dir=session_dir, verbose=VERBOSE
+    return {
+        "code-library-analyzer": code_analyzer_prompt,
+        "application-analyzer": code_analyzer_prompt,
+        "architecture-documenter": architecture_documenter_prompt,
+        "external-service-analyzer": external_service_analyzer_prompt,
+    }
+
+
+def chat():
+    """Start interactive chat with the code analysis agent."""
+
+    # Check API key first, before creating any files
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        print("\nError: OPENROUTER_API_KEY not found.")
+        print("Set it in a .env file or export it in your shell.")
+        print("Get your key at: https://openrouter.ai/keys\n")
+        return
+
+    # Setup session directory and transcript
+    transcript_file, session_dir = setup_session()
+    transcript = TranscriptWriter(transcript_file)
+
+    # Load prompts
+    lead_agent_prompt = load_prompt("lead_agent.txt")
+    agent_prompts = _build_agent_prompts()
+
+    # Initialize callback handler
+    callback_handler = FlashlightCallbackHandler(
+        transcript_writer=transcript,
+        session_dir=session_dir,
+        verbose=VERBOSE,
     )
 
-    # Define specialized subagents
-    agents = {
-        "code-library-analyzer": AgentDefinition(
-            description=(
-                "Use this agent to perform deep analysis of a specific library code component. "
-                "The code-analyzer uses Glob, Grep, Read, and Bash to explore code structure, "
-                "identify key components, trace data flows, and document architecture. "
-                "Receives upstream dependency context when analyzing library components with dependencies. "
-                "Produces structured analysis reports in Markdown format "
-                "in /tmp/{SERVICE_NAME}/service_analyses/. "
-                "Each library should get its own code-library-analyzer instance."
-            ),
-            tools=["Glob", "Grep", "Read", "Bash", "Write"],
-            prompt=code_analyzer_prompt,
-            model="sonnet",  # Use sonnet for complex code analysis
-        ),
-        "application-analyzer": AgentDefinition(
-            description=(
-                "Use this agent to perform deep analysis of an application code component. "
-                "The code-analyzer uses Glob, Grep, Read, and Bash to explore code structure, "
-                "identify key components, trace data flows, and document architecture. "
-                "Receives upstream dependency context when analyzing library components with dependencies. "
-                "Produces structured analysis reports in Markdown format "
-                "in /tmp/{SERVICE_NAME}/service_analyses/. "
-                "Each application should get its own application-analyzer instance."
-            ),
-            tools=["Glob", "Grep", "Read", "Bash", "Write"],
-            prompt=code_analyzer_prompt,
-            model="sonnet",  # Use sonnet for complex code analysis
-        ),
-        "architecture-documenter": AgentDefinition(
-            description=(
-                "Use this agent AFTER all application analyses complete to synthesize architecture documentation. "
-                "Runs once after analysis phase, reads all completed analyses and graphs, creates comprehensive docs."
-            ),
-            tools=["Glob", "Read", "Write"],
-            prompt=architecture_documenter_prompt,
-            model="sonnet",  # Use sonnet for comprehensive synthesis
-        ),
-        "external-service-analyzer": AgentDefinition(
-            description=(
-                "Use this agent to analyze how a specific external service (e.g., AWS S3, PostgreSQL, "
-                "Stripe, Ethereum RPC) is integrated into the codebase. Produces a dedicated analysis "
-                "file documenting the integration architecture, client libraries, API surface, "
-                "configuration, and security considerations. Spawn one instance per external service."
-            ),
-            tools=["Glob", "Grep", "Read", "Bash", "Write"],
-            prompt=external_service_analyzer_prompt,
-            model="sonnet",  # Use sonnet for integration analysis
-        ),
-    }
-
-    # Set up hooks for tracking subagent states
-    # and lifecycle movements
-    #
-    hooks = {
-        "PreToolUse": [
-            HookMatcher(
-                matcher=None,  # Match all tools
-                hooks=[tracker.pre_tool_use_hook],
-            )
-        ],
-        "PostToolUse": [
-            HookMatcher(
-                matcher=None,  # Match all tools
-                hooks=[tracker.post_tool_use_hook],
-            )
-        ],
-        "SubagentStop": [
-            HookMatcher(
-                matcher=None,  # Match all tools
-                hooks=[tracker.post_subagent_stop_hook],
-            )
-        ],
-    }
-
-    options = ClaudeAgentOptions(
-        permission_mode="bypassPermissions",
-        setting_sources=["project"],  # Load skills from project .claude directory
+    # Build the lead agent graph
+    graph = build_lead_graph(
         system_prompt=lead_agent_prompt,
-        allowed_tools=[
-            "Task",
-            "Glob",
-            "Read",
-            "Bash",
-            "Write",
-        ],  # Lead agent has discovery tools
-        agents=agents,
-        hooks=hooks,
-        model="sonnet",  # Use sonnet for orchestration and discovery
-        max_thinking_tokens=9999,  # Enable thinking blocks for lead agent (10k token budget)
+        agent_prompts=agent_prompts,
+        model_name="anthropic/claude-sonnet-4-20250514",
+        callback_handler=callback_handler,
     )
 
     print("\n" + "=" * 50)
-    print("  Code Analysis Agent")
+    print("  Code Analysis Agent (LangGraph)")
     print("=" * 50)
     print("\nAnalyze codebases with dependency-aware")
     print("multi-agent analysis.")
 
     # Show logging mode
     if DEBUG:
-        print("\n🔍 DEBUG MODE ENABLED - Full API trace logging")
+        print("\nDEBUG MODE ENABLED - Full trace logging")
     elif VERBOSE:
-        print("\n🔍 VERBOSE MODE ENABLED - Detailed SDK interaction logging")
+        print("\nVERBOSE MODE ENABLED - Detailed logging")
 
     print("\nProvide a path to analyze, or type 'exit' to quit.\n")
 
+    # Maintain conversation state across turns
+    state = {
+        "messages": [],
+        "subagent_results": {},
+        "service_name": "",
+        "repo_path": "",
+    }
+
     try:
-        async with ClaudeSDKClient(options=options) as client:
-            while True:
-                # Get input
-                try:
-                    user_input = input("\nYou: ").strip()
-                except (EOFError, KeyboardInterrupt):
-                    break
+        while True:
+            # Get input
+            try:
+                user_input = input("\nYou: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                break
 
-                if not user_input or user_input.lower() in ["exit", "quit", "q"]:
-                    break
+            if not user_input or user_input.lower() in ["exit", "quit", "q"]:
+                break
 
-                # Write user input to transcript (file only, not console)
-                transcript.write_to_file(f"\nYou: {user_input}\n")
+            # Write user input to transcript
+            transcript.write_to_file(f"\nYou: {user_input}\n")
 
-                await client.query(prompt=user_input)
+            # Add user message to state
+            state["messages"].append(HumanMessage(content=user_input))
 
-                transcript.write("\nAgent: ", end="")
+            transcript.write("\nAgent: ", end="")
 
-                # Stream and process response
-                message_count = 0
-                api_call_count = 0
-                async for msg in client.receive_response():
-                    message_count += 1
-                    msg_type = type(msg).__name__
+            # Run the graph
+            result = graph.invoke(
+                state,
+                config={"callbacks": [callback_handler]},
+            )
 
-                    if VERBOSE:
-                        logger.debug(f"   Message {message_count}: {msg_type}")
+            # Update state with the result
+            state = result
 
-                    # Track API calls by counting AssistantMessages (each represents an API round-trip)
-                    if msg_type == "AssistantMessage":
-                        api_call_count += 1
-                        print(
-                            f"\n🌐 [CLAUDE CALL #{api_call_count}] Claude AssistantMessage completed",
-                            flush=True,
-                        )
-                        process_assistant_message(msg, tracker, transcript)
+            # Print the final agent response
+            messages = result.get("messages", [])
+            for msg in messages:
+                if isinstance(msg, AIMessage) and msg.content:
+                    text = ""
+                    if isinstance(msg.content, str):
+                        text = msg.content
+                    elif isinstance(msg.content, list):
+                        text_parts = [
+                            block["text"]
+                            for block in msg.content
+                            if isinstance(block, dict) and block.get("type") == "text"
+                        ]
+                        text = "\n".join(text_parts)
+                    if text:
+                        transcript.write(text, end="")
 
-                if VERBOSE:
-                    logger.info(
-                        f"✓ RESPONSE COMPLETE ({message_count} messages, {api_call_count} API calls)"
-                    )
+            transcript.write("\n")
 
-                transcript.write("\n")
     finally:
         transcript.write("\n\nGoodbye!\n")
         transcript.close()
-        tracker.close()
+        callback_handler.close()
         print(f"\nSession logs saved to: {session_dir}")
         print(f"  - Transcript: {transcript_file}")
         print(f"  - Tool calls: {session_dir / 'tool_calls.jsonl'}")
 
 
 if __name__ == "__main__":
-    asyncio.run(chat())
+    chat()

@@ -250,7 +250,7 @@ def build_analysis_prompt(
 # ---------------------------------------------------------------------------
 
 
-async def analyze(
+def analyze(
     repo_path: str,
     output_dir: str,
     last_sha: str = "",
@@ -264,24 +264,20 @@ async def analyze(
         last_sha: Previous commit SHA (from manifest). Empty for full analysis.
         head_sha: Current commit SHA being analyzed.
     """
-    # Late imports: these require claude-agent-sdk and other heavy deps
-    # that aren't needed for discovery/diff logic (and may not be installed in CI).
+    # Late imports for heavy deps
     from dotenv import load_dotenv
-    from claude_agent_sdk import (
-        ClaudeSDKClient,
-        ClaudeAgentOptions,
-        AgentDefinition,
-        HookMatcher,
-    )
-    from agent.utils.subagent_tracker import SubagentTracker
+    from langchain_core.messages import HumanMessage
+
+    from agent.callbacks import FlashlightCallbackHandler
+    from agent.graph import build_lead_graph
     from agent.utils.transcript import setup_session, TranscriptWriter
-    from agent.utils.message_handler import process_assistant_message
     from agent.utils.template_loader import TemplateLoader
 
     load_dotenv()
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("Error: ANTHROPIC_API_KEY not found.", file=sys.stderr)
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        print("Error: OPENROUTER_API_KEY not found.", file=sys.stderr)
+        print("Get your key at: https://openrouter.ai/keys", file=sys.stderr)
         sys.exit(1)
 
     repo = Path(repo_path).resolve()
@@ -445,80 +441,27 @@ async def analyze(
 </package_analysis_template>
 """
 
-    # Initialize tracker
-    tracker = SubagentTracker(
-        transcript_writer=transcript, session_dir=session_dir, verbose=False
+    # Build agent prompts map
+    agent_prompts = {
+        "code-library-analyzer": code_analyzer_prompt,
+        "application-analyzer": code_analyzer_prompt,
+        "architecture-documenter": architecture_documenter_prompt,
+        "external-service-analyzer": external_service_analyzer_prompt,
+    }
+
+    # Initialize callback handler
+    callback_handler = FlashlightCallbackHandler(
+        transcript_writer=transcript,
+        session_dir=session_dir,
+        verbose=False,
     )
 
-    # Define agents (identical to interactive mode)
-    agents = {
-        "code-library-analyzer": AgentDefinition(
-            description=(
-                "Use this agent to perform deep analysis of a specific library code component. "
-                "The code-analyzer uses Glob, Grep, Read, and Bash to explore code structure, "
-                "identify key components, trace data flows, and document architecture. "
-                "Receives upstream dependency context when analyzing library components with dependencies. "
-                "Produces structured analysis reports in Markdown format "
-                f"in /tmp/{service_name}/service_analyses/. "
-                "Each library should get its own code-library-analyzer instance."
-            ),
-            tools=["Glob", "Grep", "Read", "Bash", "Write"],
-            prompt=code_analyzer_prompt,
-            model="sonnet",
-        ),
-        "application-analyzer": AgentDefinition(
-            description=(
-                "Use this agent to perform deep analysis of an application code component. "
-                "The code-analyzer uses Glob, Grep, Read, and Bash to explore code structure, "
-                "identify key components, trace data flows, and document architecture. "
-                "Receives upstream dependency context when analyzing library components with dependencies. "
-                "Produces structured analysis reports in Markdown format "
-                f"in /tmp/{service_name}/service_analyses/. "
-                "Each application should get its own application-analyzer instance."
-            ),
-            tools=["Glob", "Grep", "Read", "Bash", "Write"],
-            prompt=code_analyzer_prompt,
-            model="sonnet",
-        ),
-        "architecture-documenter": AgentDefinition(
-            description=(
-                "Use this agent AFTER all application analyses complete to synthesize architecture documentation. "
-                "Runs once after analysis phase, reads all completed analyses and graphs, creates comprehensive docs."
-            ),
-            tools=["Glob", "Read", "Write"],
-            prompt=architecture_documenter_prompt,
-            model="sonnet",
-        ),
-        "external-service-analyzer": AgentDefinition(
-            description=(
-                "Use this agent to analyze how a specific external service (e.g., AWS S3, PostgreSQL, "
-                "Stripe, Ethereum RPC) is integrated into the codebase. Produces a dedicated analysis "
-                "file documenting the integration architecture, client libraries, API surface, "
-                "configuration, and security considerations. Spawn one instance per external service."
-            ),
-            tools=["Glob", "Grep", "Read", "Bash", "Write"],
-            prompt=external_service_analyzer_prompt,
-            model="sonnet",
-        ),
-    }
-
-    hooks = {
-        "PreToolUse": [HookMatcher(matcher=None, hooks=[tracker.pre_tool_use_hook])],
-        "PostToolUse": [HookMatcher(matcher=None, hooks=[tracker.post_tool_use_hook])],
-        "SubagentStop": [
-            HookMatcher(matcher=None, hooks=[tracker.post_subagent_stop_hook])
-        ],
-    }
-
-    options = ClaudeAgentOptions(
-        permission_mode="bypassPermissions",
-        setting_sources=["project"],
+    # Build the lead agent graph
+    lead_graph = build_lead_graph(
         system_prompt=lead_agent_prompt,
-        allowed_tools=["Task", "Glob", "Read", "Bash", "Write"],
-        agents=agents,
-        hooks=hooks,
-        model="sonnet",
-        max_thinking_tokens=9999,
+        agent_prompts=agent_prompts,
+        model_name="anthropic/claude-sonnet-4-20250514",
+        callback_handler=callback_handler,
     )
 
     print(f"\nStarting {mode_label} analysis of {service_name}...")
@@ -531,34 +474,25 @@ async def analyze(
     print()
 
     try:
-        async with ClaudeSDKClient(options=options) as client:
-            # Send the analysis prompt
-            transcript.write_to_file(f"\nPrompt: {prompt}\n")
-            await client.query(prompt=prompt)
+        # Send the analysis prompt
+        transcript.write_to_file(f"\nPrompt: {prompt}\n")
 
-            transcript.write("\nAgent: ", end="")
+        result = lead_graph.invoke(
+            {
+                "messages": [HumanMessage(content=prompt)],
+                "subagent_results": {},
+                "service_name": service_name,
+                "repo_path": str(repo),
+            },
+            config={"callbacks": [callback_handler]},
+        )
 
-            # Stream the full response to completion
-            message_count = 0
-            api_call_count = 0
-            async for msg in client.receive_response():
-                message_count += 1
-                msg_type = type(msg).__name__
-
-                if msg_type == "AssistantMessage":
-                    api_call_count += 1
-                    print(
-                        f"\n[CLAUDE CALL #{api_call_count}] AssistantMessage completed",
-                        flush=True,
-                    )
-                    process_assistant_message(msg, tracker, transcript)
-
-            transcript.write("\n")
-            print(f"\nAnalysis complete ({api_call_count} API calls)")
+        transcript.write("\n")
+        print(f"\nAnalysis complete ({callback_handler.api_call_count} API calls)")
 
     finally:
         transcript.close()
-        tracker.close()
+        callback_handler.close()
 
     # Copy artifacts from /tmp/{service_name}/ to output_dir
     tmp_artifacts = Path(f"/tmp/{service_name}")
@@ -695,13 +629,11 @@ def main():
         datefmt="%H:%M:%S",
     )
 
-    asyncio.run(
-        analyze(
-            repo_path=args.repo,
-            output_dir=args.output,
-            last_sha=args.last_sha,
-            head_sha=args.head_sha,
-        )
+    analyze(
+        repo_path=args.repo,
+        output_dir=args.output,
+        last_sha=args.last_sha,
+        head_sha=args.head_sha,
     )
 
 
