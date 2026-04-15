@@ -129,13 +129,19 @@ def extract_service_name(input_str: str) -> str:
         my-service -> my-service
     """
     import re
+    from urllib.parse import urlparse
 
-    # Handle GitHub URLs
-    if "github.com" in input_str:
-        # Extract repo name from URL
-        match = re.search(r"github\.com/[^/]+/([^/]+?)(?:\.git)?(?:/.*)?$", input_str)
-        if match:
-            return match.group(1)
+    # Handle GitHub URLs - use proper URL parsing to prevent substring attacks
+    # e.g., reject "https://github.com.attacker.com/..." or "https://attacker.com?q=github.com"
+    try:
+        parsed = urlparse(input_str)
+        if parsed.scheme in ("http", "https") and parsed.netloc == "github.com":
+            # Extract repo name from URL path
+            match = re.search(r"^/[^/]+/([^/]+?)(?:\.git)?(?:/.*)?$", parsed.path)
+            if match:
+                return match.group(1)
+    except Exception:
+        pass
 
     # Handle file paths
     if "/" in input_str:
