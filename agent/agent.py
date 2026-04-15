@@ -1,10 +1,15 @@
-"""Entry point for interactive code analysis agent using LangGraph.
+"""Entry point for interactive code analysis agent using Burr.
 
-Replaces the claude-agent-sdk ClaudeSDKClient with a LangGraph-based
-multi-agent orchestrator. The lead agent delegates to specialized
-subagents (code-library-analyzer, application-analyzer, etc.) via the
-spawn_subagent tool, which is intercepted by the graph and run as
-an inline subgraph.
+Uses Burr's explicit state machine paradigm for:
+- Clear observability (state/transitions are declared, not inferred)
+- Built-in tracking UI at http://localhost:7241
+- Native parallel execution for multi-component analysis
+- State persistence and checkpointing
+
+Architecture:
+    receive_input -> read_discovery -> analyze_current_depth (loop) -> synthesize -> respond
+
+Each component analyzer runs as a separate tracked Burr application.
 """
 
 import os
@@ -12,12 +17,9 @@ import logging
 from pathlib import Path
 
 from dotenv import load_dotenv
-from langchain_core.messages import AIMessage, HumanMessage
 
-from agent.callbacks import FlashlightCallbackHandler
-from agent.graph import build_lead_graph
+from agent.burr_app import build_analysis_pipeline
 from agent.utils.transcript import setup_session, TranscriptWriter
-from agent.utils.template_loader import TemplateLoader
 
 # Load environment variables
 load_dotenv()
@@ -46,53 +48,13 @@ def load_prompt(filename: str) -> str:
         return f.read().strip()
 
 
-def _build_agent_prompts() -> dict[str, str]:
-    """Load and build all subagent system prompts.
+def analyze(service_name: str):
+    """Run analysis on a service using the structured pipeline.
 
-    Returns a dict of subagent_type -> system prompt string.
+    Args:
+        service_name: Name of the service (must have discovery files in /tmp/{service_name}/)
     """
-    # Load base prompts
-    base_code_analyzer_prompt = load_prompt("code_analyzer.txt")
-    architecture_documenter_prompt = load_prompt(
-        "subagents/architecture_documenter.txt"
-    )
-    external_service_analyzer_prompt = load_prompt(
-        "subagents/external_service_analyzer.txt"
-    )
-
-    # Load analysis templates and enhance code analyzer prompt
-    templates_dir = Path(__file__).parent.parent / "templates" / "analysis-template"
-    template_loader = TemplateLoader(templates_dir)
-
-    template_instructions = template_loader.get_template_instructions()
-    application_template = template_loader.get_template("application")
-    package_template = template_loader.get_template("package")
-
-    code_analyzer_prompt = f"""{base_code_analyzer_prompt}
-
-{template_instructions}
-
-<application_analysis_template>
-{application_template}
-</application_analysis_template>
-
-<package_analysis_template>
-{package_template}
-</package_analysis_template>
-"""
-
-    return {
-        "code-library-analyzer": code_analyzer_prompt,
-        "application-analyzer": code_analyzer_prompt,
-        "architecture-documenter": architecture_documenter_prompt,
-        "external-service-analyzer": external_service_analyzer_prompt,
-    }
-
-
-def chat():
-    """Start interactive chat with the code analysis agent."""
-
-    # Check API key first, before creating any files
+    # Check API key first
     if not os.environ.get("OPENROUTER_API_KEY"):
         print("\nError: OPENROUTER_API_KEY not found.")
         print("Set it in a .env file or export it in your shell.")
@@ -103,102 +65,127 @@ def chat():
     transcript_file, session_dir = setup_session()
     transcript = TranscriptWriter(transcript_file)
 
-    # Load prompts
-    lead_agent_prompt = load_prompt("lead_agent.txt")
-    agent_prompts = _build_agent_prompts()
-
-    # Initialize callback handler
-    callback_handler = FlashlightCallbackHandler(
-        transcript_writer=transcript,
-        session_dir=session_dir,
-        verbose=VERBOSE,
+    # Build the structured analysis pipeline
+    app = build_analysis_pipeline(
+        service_name=service_name,
+        project_name=f"flashlight-{service_name}",
     )
 
-    # Build the lead agent graph
-    graph = build_lead_graph(
-        system_prompt=lead_agent_prompt,
-        agent_prompts=agent_prompts,
-        model_name="anthropic/claude-sonnet-4-20250514",
-        callback_handler=callback_handler,
+    print("\n" + "=" * 60)
+    print("  Flashlight - Code Analysis Agent (Burr)")
+    print("=" * 60)
+    print(f"\nAnalyzing: {service_name}")
+    print(f"\n  Burr UI: http://localhost:7241")
+    print(
+        "  (Run '.burr-ui-venv/bin/python -m uvicorn burr.tracking.server.run:app --port 7241')"
     )
-
-    print("\n" + "=" * 50)
-    print("  Code Analysis Agent (LangGraph)")
-    print("=" * 50)
-    print("\nAnalyze codebases with dependency-aware")
-    print("multi-agent analysis.")
 
     # Show logging mode
     if DEBUG:
-        print("\nDEBUG MODE ENABLED - Full trace logging")
+        print("\n  DEBUG MODE ENABLED - Full trace logging")
     elif VERBOSE:
-        print("\nVERBOSE MODE ENABLED - Detailed logging")
+        print("\n  VERBOSE MODE ENABLED - Detailed logging")
 
-    print("\nProvide a path to analyze, or type 'exit' to quit.\n")
-
-    # Maintain conversation state across turns
-    state = {
-        "messages": [],
-        "subagent_results": {},
-        "service_name": "",
-        "repo_path": "",
-    }
+    print("=" * 60 + "\n")
 
     try:
-        while True:
-            # Get input
-            try:
-                user_input = input("\nYou: ").strip()
-            except (EOFError, KeyboardInterrupt):
-                break
+        transcript.write_to_file(f"\nAnalyzing {service_name}...\n")
 
-            if not user_input or user_input.lower() in ["exit", "quit", "q"]:
-                break
+        # Run the structured pipeline
+        # receive_input -> read_discovery -> analyze_current_depth (loop) -> synthesize -> respond
+        action, result, state = app.run(
+            halt_after=["respond"],
+            inputs={"task": f"Analyze {service_name}"},
+        )
 
-            # Write user input to transcript
-            transcript.write_to_file(f"\nYou: {user_input}\n")
+        # Extract and display the response
+        response = state.get("final_response", "")
+        print(f"\n{response}\n")
 
-            # Add user message to state
-            state["messages"].append(HumanMessage(content=user_input))
+        # Write response to transcript
+        transcript.write_to_file(f"\n{response}\n")
 
-            transcript.write("\nAgent: ", end="")
+        # Show analysis stats
+        analyses = state.get("component_analyses", {})
+        print(f"[Analyzed {len(analyses)} components]")
 
-            # Run the graph
-            result = graph.invoke(
-                state,
-                config={"callbacks": [callback_handler]},
-            )
-
-            # Update state with the result
-            state = result
-
-            # Print the final agent response
-            messages = result.get("messages", [])
-            for msg in messages:
-                if isinstance(msg, AIMessage) and msg.content:
-                    text = ""
-                    if isinstance(msg.content, str):
-                        text = msg.content
-                    elif isinstance(msg.content, list):
-                        text_parts = [
-                            block["text"]
-                            for block in msg.content
-                            if isinstance(block, dict) and block.get("type") == "text"
-                        ]
-                        text = "\n".join(text_parts)
-                    if text:
-                        transcript.write(text, end="")
-
-            transcript.write("\n")
+    except Exception as e:
+        logger.error(f"Error during analysis: {e}", exc_info=True)
+        print(f"\nError: {e}")
 
     finally:
-        transcript.write("\n\nGoodbye!\n")
+        transcript.write_to_file("\n\nAnalysis complete.\n")
         transcript.close()
-        callback_handler.close()
         print(f"\nSession logs saved to: {session_dir}")
         print(f"  - Transcript: {transcript_file}")
-        print(f"  - Tool calls: {session_dir / 'tool_calls.jsonl'}")
+
+
+def extract_service_name(input_str: str) -> str:
+    """Extract a valid service name from a path or URL.
+
+    Examples:
+        https://github.com/org/repo -> repo
+        /path/to/my-project -> my-project
+        my-service -> my-service
+    """
+    import re
+
+    # Handle GitHub URLs
+    if "github.com" in input_str:
+        # Extract repo name from URL
+        match = re.search(r"github\.com/[^/]+/([^/]+?)(?:\.git)?(?:/.*)?$", input_str)
+        if match:
+            return match.group(1)
+
+    # Handle file paths
+    if "/" in input_str:
+        return Path(input_str).name
+
+    return input_str
 
 
 if __name__ == "__main__":
-    chat()
+    import sys
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Run Flashlight analysis on a codebase",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Analyze a repo (discovery must be done first via CLI)
+  python -m agent.agent --repo https://github.com/org/repo
+  python -m agent.agent my-service
+  
+  # Run full analysis with discovery:
+  python -m agent.cli analyze https://github.com/org/repo
+        """,
+    )
+    parser.add_argument("repo", nargs="?", help="Repository URL, path, or service name")
+    parser.add_argument(
+        "--repo",
+        dest="repo_flag",
+        help="Repository URL, path, or service name (alternative syntax)",
+    )
+
+    args = parser.parse_args()
+
+    # Get repo from either positional or flag
+    input_arg = args.repo_flag or args.repo
+
+    if not input_arg:
+        parser.print_help()
+        sys.exit(1)
+
+    service_name = extract_service_name(input_arg)
+
+    # Check if discovery files exist
+    work_dir = Path(f"/tmp/{service_name}")
+    if not (work_dir / "service_discovery" / "components.json").exists():
+        print(f"\nError: Discovery files not found for '{service_name}'")
+        print(f"  Expected: {work_dir}/service_discovery/components.json")
+        print("\nRun discovery first using the CLI:")
+        print(f"  python -m agent.cli analyze {input_arg}")
+        sys.exit(1)
+
+    analyze(service_name)

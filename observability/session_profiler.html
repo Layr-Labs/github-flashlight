@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude Multi-Agent Session Profiler</title>
+    <title>LangGraph Multi-Agent Session Profiler</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         * {
@@ -319,37 +319,40 @@
     <div class="container">
         <div class="header">
             <div>
-                <h1>🔍 Tool Calls Visualization</h1>
-                <p style="color: #666; margin-top: 5px;">Interactive analysis of agent tool usage and resource weights</p>
+                <h1>LangGraph Session Profiler</h1>
+                <p style="color: #666; margin-top: 5px;">Interactive analysis of LangGraph agent tool usage, node transitions, and resource weights</p>
             </div>
-            <div class="file-input" style="flex-direction: column; align-items: flex-end; gap: 10px;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <label for="fileInput" style="font-weight: 500;">Tool Calls:</label>
-                    <input type="file" id="fileInput" accept=".jsonl">
-                    <label for="tokenFileInput" style="font-weight: 500; margin-left: 15px;">Session Log:</label>
-                    <input type="file" id="tokenFileInput" accept=".jsonl">
-                </div>
-                <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
-                    <label for="urlInput" style="font-weight: 500;">URL:</label>
-                    <input type="text" id="urlInput" placeholder="http://localhost:8000/logs/latest/tool_calls.jsonl" style="width: 450px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; margin-left: 10px;">
-                        <input type="checkbox" id="liveMonitor">
-                        <span style="font-weight: 500;">Live Monitor</span>
-                    </label>
-                    <span id="liveStatus" style="margin-left: 10px; color: #666; font-size: 13px;"></span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
-                    <label for="sessionUrlInput" style="font-weight: 500;">Session URL:</label>
-                    <input type="text" id="sessionUrlInput" placeholder="http://localhost:8000/logs/latest/session.jsonl" style="width: 450px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;" readonly>
-                </div>
+            <div class="file-input" style="display: flex; align-items: center; gap: 15px;">
+                <button id="connectBtn" style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px;">
+                    Connect to Agent
+                </button>
+                <span id="liveStatus" style="color: #666; font-size: 13px;"></span>
+                <details style="margin-left: auto;">
+                    <summary style="cursor: pointer; color: #666; font-size: 13px;">Advanced</summary>
+                    <div style="position: absolute; right: 20px; background: white; padding: 15px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-top: 10px; z-index: 100;">
+                        <div style="margin-bottom: 10px;">
+                            <label for="fileInput" style="font-weight: 500; display: block; margin-bottom: 5px;">Load from file:</label>
+                            <input type="file" id="fileInput" accept=".jsonl">
+                        </div>
+                        <div>
+                            <label for="urlInput" style="font-weight: 500; display: block; margin-bottom: 5px;">Custom URL:</label>
+                            <input type="text" id="urlInput" placeholder="http://localhost:8000/..." style="width: 300px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                    </div>
+                </details>
             </div>
         </div>
+        <!-- Hidden inputs for backward compatibility -->
+        <input type="file" id="tokenFileInput" accept=".jsonl" style="display: none;">
+        <input type="text" id="sessionUrlInput" style="display: none;">
 
         <div id="statsContainer" class="stats" style="display: none;"></div>
 
         <div class="tabs">
             <button class="tab active" data-tab="timeline">Timeline View</button>
             <button class="tab" data-tab="lifespan">Lifespan View</button>
+            <button class="tab" data-tab="reasoning">Reasoning Patterns</button>
+            <button class="tab" data-tab="graph">Graph Nodes</button>
             <button class="tab" data-tab="analysis">Tool Usage Analysis</button>
             <button class="tab" data-tab="clustering">Resource Clustering</button>
             <button class="tab" data-tab="text">Text Analysis</button>
@@ -367,6 +370,28 @@
             <div class="filter-controls" id="lifespanFilters"></div>
             <div class="visualization">
                 <svg id="lifespanChart"></svg>
+            </div>
+        </div>
+
+        <div id="reasoning" class="tab-content">
+            <div class="visualization">
+                <h3 style="margin-bottom: 15px;">Reasoning Pattern Analysis</h3>
+                <p style="color: #666; margin-bottom: 15px;">
+                    Analyzes the reasoning strategies used by agents: one-shot, chain-of-thought, ReAct (tool use loops), multi-turn, and extended thinking.
+                </p>
+                <div id="reasoningStatsContainer" class="stats" style="margin-bottom: 20px;"></div>
+                <div id="reasoningContainer"></div>
+            </div>
+        </div>
+
+        <div id="graph" class="tab-content">
+            <div class="visualization">
+                <h3 style="margin-bottom: 15px;">LangGraph Node Transitions</h3>
+                <p style="color: #666; margin-bottom: 15px;">
+                    Visualizes the execution flow through LangGraph nodes including agent, tools, and routing decisions.
+                </p>
+                <div id="graphStatsContainer" class="stats" style="margin-bottom: 20px;"></div>
+                <div id="graphNodeContainer"></div>
             </div>
         </div>
 
@@ -570,7 +595,7 @@
             });
         }
 
-        // File input handler
+        // File input handler (advanced mode)
         document.getElementById('fileInput').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
@@ -578,7 +603,7 @@
             }
         });
 
-        // Token file input handler
+        // Token file input handler (hidden, for backward compatibility)
         document.getElementById('tokenFileInput').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
@@ -591,104 +616,143 @@
         let toolUsageEndpoint = null;
         let currentUrl = null;
         let lastEventCount = 0;
+        let isConnected = false;
 
-        // Live monitor checkbox handler
-        document.getElementById('liveMonitor').addEventListener('change', (e) => {
-            if (e.target.checked) {
-                if (!toolUsageEndpoint) {
-                    const url = document.getElementById('urlInput').value.trim();
-                    if (!url) {
-                        alert('Please enter a URL first');
-                        e.target.checked = false;
-                        return;
-                    }
-                    toolUsageEndpoint = url;
-                }
-                startLiveToolCallMonitoring();
+        // Connect button handler
+        document.getElementById('connectBtn').addEventListener('click', () => {
+            if (isConnected) {
+                disconnectFromAgent();
             } else {
-                stopLiveMonitoring();
+                connectToAgent();
             }
         });
 
-        // Initialize page: fetch session ID from server if available
-        async function initializeSession() {
-            try {
-                console.log('Initializing session...');
-                const response = await fetch('http://localhost:8000/get/session_id');
-                console.log('Server response status:', response.status);
+        // Connect to agent - auto-discover and start monitoring
+        async function connectToAgent() {
+            const btn = document.getElementById('connectBtn');
+            btn.textContent = 'Connecting...';
+            btn.disabled = true;
+            updateLiveStatus('Connecting to agent...');
 
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('Server data:', data);
-
-                    if (data.session_file) {
-                        // Construct tool calls URL
-                        const sessionUrl = `http://localhost:8000/${data.session_file}`;
-                        console.log("session url", sessionUrl);
-
-                        // Set the tool calls URL input field (CORRECT FIELD)
-                        document.getElementById('urlInput').value = sessionUrl;
-
-                        // Derive session log URL: SESSION_ID.jsonl → SESSION_ID/session.jsonl
-                        const sessionLogUrl = sessionUrl;
-                        document.getElementById('sessionUrlInput').value = sessionLogUrl;
-
-                        // Load tool calls data
-
-                        // Attempt to load session log (optional - may not exist yet)
-                        try {
-                            await loadSessionFromUrl(sessionLogUrl);
-                        } catch (e) {
-                            console.log('Session log not available:', e.message);
+            // Try multiple ports in case default is in use
+            const ports = [8888, 8000, 8080, 3000];
+            let response = null;
+            let serverPort = null;
+            
+            for (const port of ports) {
+                try {
+                    const testResponse = await fetch(`http://localhost:${port}/get/tool_calls_file`, {
+                        signal: AbortSignal.timeout(1000)
+                    });
+                    if (testResponse.ok) {
+                        const data = await testResponse.json();
+                        if (data.tool_calls_file) {
+                            response = testResponse;
+                            serverPort = port;
+                            break;
                         }
                     }
+                } catch (e) {
+                    // Try next port
                 }
-            } catch (error) {
-                // Silently fail - server might not be running or no session available
-                console.log('No session auto-load available:', error.message);
             }
-        }
 
-        // Initialize tool calls: fetch tool calls file from server if available
-        async function initializeToolCalls() {
             try {
-                console.log('Initializing tool calls...');
-                const response = await fetch('http://localhost:8000/get/tool_calls_file');
-                console.log('Tool calls server response status:', response.status);
-
+                if (!serverPort) {
+                    throw new Error('No server found on ports ' + ports.join(', '));
+                }
+                
+                // Re-fetch since we consumed the response
+                response = await fetch(`http://localhost:${serverPort}/get/tool_calls_file`);
+                
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('Tool calls server data:', data);
-
+                    
                     if (data.tool_calls_file) {
-                        // Construct tool calls URL
-                        const toolCallsUrl = `http://localhost:8000/${data.tool_calls_file}`;
-                        console.log("Tool calls url", toolCallsUrl);
-
-                        // Set the URL in the input field
+                        const toolCallsUrl = `http://localhost:${serverPort}/${data.tool_calls_file}`;
                         document.getElementById('urlInput').value = toolCallsUrl;
-
-                        // Set up live monitoring
+                        
                         currentUrl = toolCallsUrl;
                         toolUsageEndpoint = toolCallsUrl;
-
-                        // Load tool calls data
+                        
+                        // Load initial data
                         await loadToolCallsFromURL(toolCallsUrl);
-
-                        // Enable live monitoring
-                        document.getElementById('liveMonitor').checked = true;
+                        
+                        // Start live monitoring
                         startLiveToolCallMonitoring();
+                        
+                        isConnected = true;
+                        btn.textContent = 'Disconnect';
+                        btn.style.background = 'linear-gradient(135deg, #f5576c 0%, #f093fb 100%)';
+                        updateLiveStatus('Connected - Live monitoring active');
+                    } else {
+                        throw new Error('No active session found');
                     }
+                } else {
+                    throw new Error('Server not responding');
                 }
             } catch (error) {
-                // Silently fail - server might not be running or no tool calls file available
-                console.log('No tool calls auto-load available:', error.message);
+                console.error('Connection failed:', error);
+                updateLiveStatus(`Connection failed: ${error.message}`);
+                btn.textContent = 'Connect to Agent';
+                btn.disabled = false;
+                
+                // Show helpful message
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('loading').innerHTML = `
+                    <div style="color: #666; padding: 40px; text-align: center;">
+                        <h3 style="margin-bottom: 15px;">Could not connect to agent</h3>
+                        <p style="margin-bottom: 20px;">Make sure the log server is running:</p>
+                        <code style="display: block; background: #f5f5f5; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                            cd observability && ./live_monitor.sh
+                        </code>
+                        <p style="color: #999; font-size: 13px;">Or use the Advanced menu to load a file manually.</p>
+                    </div>
+                `;
             }
+            
+            btn.disabled = false;
         }
 
-        // Call initialization when page loads
-        initializeSession();
-        initializeToolCalls();
+        // Disconnect from agent
+        function disconnectFromAgent() {
+            stopLiveMonitoring();
+            isConnected = false;
+            
+            const btn = document.getElementById('connectBtn');
+            btn.textContent = 'Connect to Agent';
+            btn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            updateLiveStatus('Disconnected');
+        }
+
+        // Auto-connect on page load
+        async function autoConnect() {
+            // Try multiple ports
+            const ports = [8888, 8000, 8080, 3000];
+            
+            for (const port of ports) {
+                try {
+                    const response = await fetch(`http://localhost:${port}/get/tool_calls_file`, {
+                        signal: AbortSignal.timeout(1000)
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.tool_calls_file) {
+                            // Server is running with active session, auto-connect
+                            connectToAgent();
+                            return;
+                        }
+                    }
+                } catch (error) {
+                    // Try next port
+                }
+            }
+            console.log('Auto-connect: no server found');
+        }
+
+        // Call auto-connect when page loads
+        autoConnect();
 
         // Load data from URL
         async function loadToolCallsFromURL(url) {
@@ -1095,18 +1159,25 @@
             reader.readAsText(file);
         }
 
-        // Global text block data
+        // Global data arrays
         let textBlockData = [];
         let thinkingBlockData = [];
+        let graphNodeData = [];
+        let llmEventData = [];
+        let subagentEventData = [];
 
         // Process data
         function processData() {
             const toolCallStarts = {};
             const toolCallCompletes = {};
+            const llmStartEvents = {};  // For backwards compatibility with old logs
 
             // Clear previous data
             textBlockData = [];
             thinkingBlockData = [];
+            graphNodeData = [];
+            llmEventData = [];
+            subagentEventData = [];
 
             allEvents.forEach(event => {
                 if (event.event === 'tool_call_start') {
@@ -1131,8 +1202,130 @@
                         thinkingLength: event.thinking_length,
                         parentToolUseId: event.parent_tool_use_id
                     });
+                } else if (event.event === 'graph_node_start' || event.event === 'graph_node_end') {
+                    // LangGraph node transition events
+                    graphNodeData.push({
+                        event: event.event,
+                        timestamp: new Date(event.timestamp),
+                        nodeName: event.node_name,
+                        graphId: event.graph_id,
+                        agentId: event.agent_id,
+                        runId: event.run_id
+                    });
+                } else if (event.event === 'llm_complete') {
+                    // LLM completion events with token usage AND reasoning pattern (from LangGraph callbacks)
+                    // Reasoning pattern is now included directly in llm_complete, no correlation needed
+                    llmEventData.push({
+                        timestamp: new Date(event.timestamp),
+                        runId: event.run_id,
+                        agentId: event.agent_id,
+                        agentType: event.agent_type,
+                        graphNode: event.graph_node,
+                        inputTokens: event.input_tokens || 0,
+                        outputTokens: event.output_tokens || 0,
+                        cacheRead: event.cache_read_tokens || 0,
+                        cacheCreation: event.cache_creation_tokens || 0,
+                        totalInputTokens: event.total_input_tokens || 0,
+                        totalOutputTokens: event.total_output_tokens || 0,
+                        model: event.model || 'unknown',
+                        responseAnalysis: event.response_analysis || {},
+                        reasoningPattern: event.reasoning_pattern || {},
+                        durationMs: event.duration_ms,
+                    });
+                } else if (event.event === 'llm_start') {
+                    // LLM start events - now primarily for backwards compatibility
+                    // Reasoning pattern is also captured in llm_complete
+                    llmStartEvents[event.run_id] = {
+                        timestamp: new Date(event.timestamp),
+                        runId: event.run_id,
+                        agentId: event.agent_id,
+                        graphNode: event.graph_node,
+                        reasoningPattern: event.reasoning_pattern || {},
+                        model: event.model,
+                    };
+                } else if (event.event === 'subagent_spawn' || event.event === 'subagent_complete') {
+                    // Subagent lifecycle events
+                    subagentEventData.push({
+                        event: event.event,
+                        timestamp: new Date(event.timestamp),
+                        agentId: event.agent_id || event.subagent_id,
+                        subagentType: event.subagent_type || event.agent_type,
+                        description: event.description,
+                        toolCalls: event.tool_calls,
+                        duration: event.duration
+                    });
+                } else if (event.event === 'layer_start' || event.event === 'layer_complete') {
+                    // Layer-based parallel orchestration events
+                    if (!window.layerEventData) window.layerEventData = [];
+                    window.layerEventData.push({
+                        event: event.event,
+                        timestamp: new Date(event.timestamp),
+                        layerIndex: event.layer_index,
+                        totalLayers: event.total_layers,
+                        componentCount: event.component_count,
+                        components: event.components || [],
+                        successful: event.successful,
+                        failed: event.failed,
+                        durationSeconds: event.duration_seconds,
+                        results: event.results || []
+                    });
+                } else if (event.event === 'orchestration_start' || event.event === 'orchestration_complete') {
+                    // Overall orchestration events
+                    if (!window.orchestrationEvents) window.orchestrationEvents = [];
+                    window.orchestrationEvents.push({
+                        event: event.event,
+                        timestamp: new Date(event.timestamp),
+                        totalComponents: event.total_components,
+                        totalLayers: event.total_layers,
+                        layerSizes: event.layer_sizes,
+                        totalDurationSeconds: event.total_duration_seconds,
+                        successful: event.successful,
+                        failed: event.failed
+                    });
                 }
             });
+            
+            // Post-process: merge llm_start data into llm_complete events for backwards compatibility
+            // (Old logs may not have reasoning_pattern in llm_complete)
+            llmEventData.forEach(event => {
+                if (!event.reasoningPattern || !event.reasoningPattern.type) {
+                    const startEvent = llmStartEvents[event.runId];
+                    if (startEvent && startEvent.reasoningPattern) {
+                        event.reasoningPattern = startEvent.reasoningPattern;
+                    }
+                }
+            });
+
+            // Use LLM events for token tracking (from LangGraph callbacks)
+            // This is the primary source now - the tool_calls.jsonl contains everything
+            if (llmEventData.length > 0) {
+                // Sort by timestamp
+                llmEventData.sort((a, b) => a.timestamp - b.timestamp);
+                
+                // Calculate cumulative values if not provided
+                let cumInput = 0, cumOutput = 0, cumCacheRead = 0, cumCacheCreation = 0;
+                
+                tokenData = llmEventData.map(d => {
+                    cumInput += d.inputTokens;
+                    cumOutput += d.outputTokens;
+                    cumCacheRead += d.cacheRead;
+                    cumCacheCreation += d.cacheCreation;
+                    
+                    return {
+                        timestamp: d.timestamp,
+                        inputTokens: d.inputTokens,
+                        cacheRead: d.cacheRead,
+                        cacheCreation: d.cacheCreation,
+                        outputTokens: d.outputTokens,
+                        cumInputTokens: d.totalInputTokens || cumInput,
+                        cumOutputTokens: d.totalOutputTokens || cumOutput,
+                        cumCacheRead: cumCacheRead,
+                        cumCacheCreation: cumCacheCreation,
+                        cumTotal: (d.totalInputTokens || cumInput) + (d.totalOutputTokens || cumOutput),
+                        model: d.model
+                    };
+                });
+            }
 
             toolCallData = Object.entries(toolCallStarts).map(([id, startEvent]) => {
                 const completeEvent = toolCallCompletes[id];
@@ -1203,13 +1396,17 @@
             const avgDuration = durations.length > 0 ? d3.mean(durations) : 0;
             const failedCalls = completedCalls.filter(d => d.success === false).length;
 
+            // Count subagents
+            const subagentSpawns = subagentEventData.filter(e => e.event === 'subagent_spawn').length;
+            const subagentCompletes = subagentEventData.filter(e => e.event === 'subagent_complete').length;
+
             const stats = [
                 { label: 'Total Tool Calls', value: toolCallData.length, class: 'success' },
-                { label: 'Completed', value: `${completedCalls.length} (${completionRate.toFixed(0)}%)`, class: completionRate < 90 ? 'warning' : 'success' },
+                { label: 'Active Agents', value: agents.size, class: 'success' },
+                { label: 'Subagents Spawned', value: subagentSpawns, class: subagentSpawns > 0 ? 'success' : '' },
                 { label: 'Avg Duration', value: formatTime(avgDuration), class: avgDuration > 5 ? 'warning' : 'success' },
                 { label: 'Failed Calls', value: failedCalls, class: failedCalls > 0 ? 'warning' : 'success' },
-                { label: 'Active Agents', value: agents.size, class: 'success' },
-                { label: 'Thinking Blocks', value: thinkingBlockData.length, class: 'success' },
+                { label: 'LLM Calls', value: llmEventData.length, class: llmEventData.length > 0 ? 'success' : '' },
                 { label: 'Avg Context Weight', value: avgWeight.toFixed(2), class: avgWeight > 7 ? 'warning' : 'success' }
             ];
 
@@ -1220,6 +1417,457 @@
                     <div class="stat-value">${stat.value}</div>
                 </div>
             `).join('');
+        }
+
+        // Render session overview with subagent orchestration
+        function renderSessionOverview(container) {
+            // Get all timestamps for global time range
+            const allTimestamps = [
+                ...toolCallData.map(d => d.timestamp),
+                ...subagentEventData.map(d => d.timestamp)
+            ];
+            
+            if (allTimestamps.length === 0) return;
+            
+            const globalMinTime = d3.min(allTimestamps);
+            const globalMaxTime = d3.max(allTimestamps);
+            const totalDuration = (globalMaxTime - globalMinTime) / 1000;
+
+            // Build subagent timeline data
+            const subagentTimelines = {};
+            subagentEventData.forEach(event => {
+                const agentId = event.agentId;
+                if (!subagentTimelines[agentId]) {
+                    subagentTimelines[agentId] = { spawn: null, complete: null, type: event.subagentType, description: event.description, inputTokens: 0, outputTokens: 0 };
+                }
+                if (event.event === 'subagent_spawn') {
+                    subagentTimelines[agentId].spawn = event.timestamp;
+                    subagentTimelines[agentId].type = event.subagentType;
+                    subagentTimelines[agentId].description = event.description;
+                } else if (event.event === 'subagent_complete') {
+                    subagentTimelines[agentId].complete = event.timestamp;
+                    subagentTimelines[agentId].toolCalls = event.toolCalls;
+                    subagentTimelines[agentId].duration = event.duration;
+                }
+            });
+
+            // Aggregate token usage by agent
+            const tokensByAgent = {};
+            llmEventData.forEach(event => {
+                const agentId = event.agentId || 'MAIN_AGENT';
+                if (!tokensByAgent[agentId]) {
+                    tokensByAgent[agentId] = { inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheCreation: 0, calls: 0 };
+                }
+                tokensByAgent[agentId].inputTokens += event.inputTokens || 0;
+                tokensByAgent[agentId].outputTokens += event.outputTokens || 0;
+                tokensByAgent[agentId].cacheRead += event.cacheRead || 0;
+                tokensByAgent[agentId].cacheCreation += event.cacheCreation || 0;
+                tokensByAgent[agentId].calls += 1;
+            });
+
+            // Merge token data into subagent timelines
+            Object.entries(tokensByAgent).forEach(([agentId, tokens]) => {
+                if (subagentTimelines[agentId]) {
+                    subagentTimelines[agentId].inputTokens = tokens.inputTokens;
+                    subagentTimelines[agentId].outputTokens = tokens.outputTokens;
+                    subagentTimelines[agentId].cacheRead = tokens.cacheRead;
+                    subagentTimelines[agentId].llmCalls = tokens.calls;
+                }
+            });
+
+            // If no LLM events, estimate tokens from tool output sizes
+            // Rough estimation: 1 token ≈ 4 characters
+            if (llmEventData.length === 0) {
+                toolCallData.forEach(tc => {
+                    const agentId = tc.agentId;
+                    if (!tokensByAgent[agentId]) {
+                        tokensByAgent[agentId] = { inputTokens: 0, outputTokens: 0, estimated: true };
+                    }
+                    // Estimate output tokens from tool output size
+                    if (tc.outputSize) {
+                        tokensByAgent[agentId].outputTokens += Math.round(tc.outputSize / 4);
+                    }
+                    // Estimate input tokens from tool input
+                    const inputStr = JSON.stringify(tc.toolInput || {});
+                    tokensByAgent[agentId].inputTokens += Math.round(inputStr.length / 4);
+                });
+
+                // Merge estimates into subagent timelines
+                Object.entries(tokensByAgent).forEach(([agentId, tokens]) => {
+                    if (subagentTimelines[agentId]) {
+                        subagentTimelines[agentId].inputTokens = tokens.inputTokens;
+                        subagentTimelines[agentId].outputTokens = tokens.outputTokens;
+                        subagentTimelines[agentId].estimated = true;
+                    }
+                });
+            }
+
+            // Calculate totals
+            const totalInputTokens = Object.values(tokensByAgent).reduce((sum, t) => sum + t.inputTokens, 0);
+            const totalOutputTokens = Object.values(tokensByAgent).reduce((sum, t) => sum + t.outputTokens, 0);
+            const totalCacheRead = Object.values(tokensByAgent).reduce((sum, t) => sum + (t.cacheRead || 0), 0);
+            const isEstimated = llmEventData.length === 0;
+
+            // Group agents by type for summary
+            const agentsByType = {};
+            Object.entries(subagentTimelines).forEach(([agentId, data]) => {
+                const type = data.type || 'unknown';
+                if (!agentsByType[type]) agentsByType[type] = [];
+                agentsByType[type].push({ agentId, ...data });
+            });
+
+            // Create overview div
+            const overviewDiv = document.createElement('div');
+            overviewDiv.className = 'session-overview';
+            overviewDiv.style.cssText = 'margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%); border-radius: 12px; border: 1px solid #ddd;';
+
+            // Summary stats
+            const subagentCount = Object.keys(subagentTimelines).length;
+            const completedSubagents = Object.values(subagentTimelines).filter(s => s.complete).length;
+            const mainAgentCalls = toolCallData.filter(d => d.agentId === 'MAIN_AGENT').length;
+            const subagentCalls = toolCallData.filter(d => d.agentId !== 'MAIN_AGENT').length;
+
+            // Cost estimation (using Claude Sonnet pricing as baseline)
+            // Input: $3/1M tokens, Output: $15/1M tokens, Cache read: $0.30/1M
+            const inputCost = (totalInputTokens / 1000000) * 3;
+            const outputCost = (totalOutputTokens / 1000000) * 15;
+            const cacheSavings = (totalCacheRead / 1000000) * (3 - 0.30); // savings vs regular input
+            const totalCost = inputCost + outputCost;
+
+            let html = `
+                <h3 style="margin: 0 0 15px 0; display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 24px;">📊</span>
+                    Session Overview
+                    <span style="font-size: 14px; font-weight: normal; color: #666;">
+                        (${formatTime(totalDuration)} total)
+                    </span>
+                </h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                    <div style="background: white; padding: 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: bold; color: #667eea;">${subagentCount}</div>
+                        <div style="font-size: 11px; color: #666;">Subagents</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: bold; color: #43e97b;">${completedSubagents}</div>
+                        <div style="font-size: 11px; color: #666;">Completed</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: bold; color: #4facfe;">${mainAgentCalls + subagentCalls}</div>
+                        <div style="font-size: 11px; color: #666;">Total Tool Calls</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 8px; text-align: center; border: 2px solid #667eea;">
+                        <div style="font-size: 24px; font-weight: bold; color: #667eea;">${formatTokens(totalInputTokens)}</div>
+                        <div style="font-size: 11px; color: #666;">Input Tokens${isEstimated ? '*' : ''}</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 8px; text-align: center; border: 2px solid #f093fb;">
+                        <div style="font-size: 24px; font-weight: bold; color: #f093fb;">${formatTokens(totalOutputTokens)}</div>
+                        <div style="font-size: 11px; color: #666;">Output Tokens${isEstimated ? '*' : ''}</div>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border-radius: 8px; text-align: center; color: white;">
+                        <div style="font-size: 24px; font-weight: bold;">$${totalCost.toFixed(2)}</div>
+                        <div style="font-size: 11px; opacity: 0.9;">Est. Cost${isEstimated ? '*' : ''}</div>
+                    </div>
+                </div>
+                ${isEstimated ? '<p style="font-size: 11px; color: #999; margin: -10px 0 15px 0;">* Token counts estimated from tool I/O. Run with updated callbacks for accurate tracking.</p>' : ''}
+            `;
+
+            // Subagent type breakdown with token consumption
+            if (Object.keys(agentsByType).length > 0) {
+                html += `<h4 style="margin: 20px 0 10px 0;">Token Consumption by Agent Type</h4>`;
+                html += `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">`;
+                
+                const typeColors = {
+                    'code-library-analyzer': '#4facfe',
+                    'application-analyzer': '#43e97b',
+                    'architecture-documenter': '#f093fb',
+                    'external-service-analyzer': '#fa709a'
+                };
+
+                // Add MAIN_AGENT tokens
+                const mainAgentTokens = tokensByAgent['MAIN_AGENT'] || { inputTokens: 0, outputTokens: 0 };
+                const mainTotalTokens = mainAgentTokens.inputTokens + mainAgentTokens.outputTokens;
+                const mainCost = (mainAgentTokens.inputTokens / 1000000) * 3 + (mainAgentTokens.outputTokens / 1000000) * 15;
+                
+                html += `
+                    <div style="background: white; padding: 12px 15px; border-radius: 6px; border-left: 4px solid #667eea;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-weight: 600;">Lead Agent</div>
+                            <div style="font-size: 14px; font-weight: bold; color: #667eea;">$${mainCost.toFixed(2)}</div>
+                        </div>
+                        <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                            ${formatTokens(mainAgentTokens.inputTokens)} in / ${formatTokens(mainAgentTokens.outputTokens)} out
+                        </div>
+                        <div style="margin-top: 6px; background: #f0f0f0; border-radius: 4px; height: 6px; overflow: hidden;">
+                            <div style="background: #667eea; height: 100%; width: ${totalInputTokens + totalOutputTokens > 0 ? (mainTotalTokens / (totalInputTokens + totalOutputTokens) * 100) : 0}%;"></div>
+                        </div>
+                    </div>
+                `;
+
+                Object.entries(agentsByType).forEach(([type, agents]) => {
+                    const color = typeColors[type] || '#667eea';
+                    const completed = agents.filter(a => a.complete).length;
+                    
+                    // Sum tokens for this type
+                    const typeInputTokens = agents.reduce((sum, a) => sum + (a.inputTokens || 0), 0);
+                    const typeOutputTokens = agents.reduce((sum, a) => sum + (a.outputTokens || 0), 0);
+                    const typeTotalTokens = typeInputTokens + typeOutputTokens;
+                    const typeCost = (typeInputTokens / 1000000) * 3 + (typeOutputTokens / 1000000) * 15;
+                    
+                    // Get token contribution from tokensByAgent for agents of this type
+                    let agentTypeTokens = { inputTokens: 0, outputTokens: 0 };
+                    agents.forEach(a => {
+                        const agentTokens = tokensByAgent[a.agentId];
+                        if (agentTokens) {
+                            agentTypeTokens.inputTokens += agentTokens.inputTokens || 0;
+                            agentTypeTokens.outputTokens += agentTokens.outputTokens || 0;
+                        }
+                    });
+                    const actualTypeCost = (agentTypeTokens.inputTokens / 1000000) * 3 + (agentTypeTokens.outputTokens / 1000000) * 15;
+                    const actualTotalTokens = agentTypeTokens.inputTokens + agentTypeTokens.outputTokens;
+                    
+                    html += `
+                        <div style="background: white; padding: 12px 15px; border-radius: 6px; border-left: 4px solid ${color};">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div style="font-weight: 600;">${type}</div>
+                                <div style="font-size: 14px; font-weight: bold; color: ${color};">$${actualTypeCost.toFixed(2)}</div>
+                            </div>
+                            <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                                ${agents.length} agents · ${formatTokens(agentTypeTokens.inputTokens)} in / ${formatTokens(agentTypeTokens.outputTokens)} out
+                            </div>
+                            <div style="margin-top: 6px; background: #f0f0f0; border-radius: 4px; height: 6px; overflow: hidden;">
+                                <div style="background: ${color}; height: 100%; width: ${totalInputTokens + totalOutputTokens > 0 ? (actualTotalTokens / (totalInputTokens + totalOutputTokens) * 100) : 0}%;"></div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            }
+
+            // Per-agent token breakdown table
+            if (Object.keys(tokensByAgent).length > 0) {
+                const sortedAgents = Object.entries(tokensByAgent)
+                    .map(([id, t]) => ({ id, ...t, total: t.inputTokens + t.outputTokens, cost: (t.inputTokens / 1000000) * 3 + (t.outputTokens / 1000000) * 15 }))
+                    .sort((a, b) => b.total - a.total);
+                
+                const topAgents = sortedAgents.slice(0, 10);
+                const maxTokens = topAgents[0]?.total || 1;
+
+                html += `
+                    <details style="margin-top: 20px;">
+                        <summary style="cursor: pointer; font-weight: 600; padding: 10px 0;">
+                            📋 Per-Agent Token Breakdown (Top 10 by usage)
+                        </summary>
+                        <div style="background: white; border-radius: 8px; padding: 15px; margin-top: 10px;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                                <thead>
+                                    <tr style="border-bottom: 2px solid #ddd;">
+                                        <th style="text-align: left; padding: 8px;">Agent</th>
+                                        <th style="text-align: right; padding: 8px;">Input</th>
+                                        <th style="text-align: right; padding: 8px;">Output</th>
+                                        <th style="text-align: right; padding: 8px;">Total</th>
+                                        <th style="text-align: right; padding: 8px;">Cost</th>
+                                        <th style="padding: 8px; width: 150px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${topAgents.map(agent => `
+                                        <tr style="border-bottom: 1px solid #eee;">
+                                            <td style="padding: 8px; font-weight: ${agent.id === 'MAIN_AGENT' ? 'bold' : 'normal'};">
+                                                ${agent.id === 'MAIN_AGENT' ? '👑 ' : ''}${agent.id.length > 30 ? agent.id.substring(0, 27) + '...' : agent.id}
+                                            </td>
+                                            <td style="text-align: right; padding: 8px; color: #667eea;">${formatTokens(agent.inputTokens)}</td>
+                                            <td style="text-align: right; padding: 8px; color: #f093fb;">${formatTokens(agent.outputTokens)}</td>
+                                            <td style="text-align: right; padding: 8px; font-weight: bold;">${formatTokens(agent.total)}</td>
+                                            <td style="text-align: right; padding: 8px; color: #4CAF50; font-weight: bold;">$${agent.cost.toFixed(3)}</td>
+                                            <td style="padding: 8px;">
+                                                <div style="background: #f0f0f0; border-radius: 4px; height: 8px; overflow: hidden;">
+                                                    <div style="background: linear-gradient(90deg, #667eea ${agent.inputTokens / agent.total * 100}%, #f093fb ${agent.inputTokens / agent.total * 100}%); height: 100%; width: ${agent.total / maxTokens * 100}%;"></div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                            ${isEstimated ? '<p style="font-size: 11px; color: #999; margin: 10px 0 0 0;">* Tokens estimated from tool I/O sizes</p>' : ''}
+                        </div>
+                    </details>
+                `;
+            }
+
+            // Layer-based orchestration info (if available)
+            const layerEvents = window.layerEventData || [];
+            const orchestrationEvts = window.orchestrationEvents || [];
+            
+            if (layerEvents.length > 0) {
+                const layerStarts = layerEvents.filter(e => e.event === 'layer_start');
+                const layerCompletes = layerEvents.filter(e => e.event === 'layer_complete');
+                
+                html += `
+                    <h4 style="margin: 25px 0 10px 0;">Parallel Layer Execution</h4>
+                    <div style="background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                        <p style="color: #666; margin: 0 0 15px 0;">
+                            Components analyzed in <strong>${layerStarts.length} dependency layers</strong> with parallel dispatch per layer.
+                        </p>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            ${layerStarts.map((layer, i) => {
+                                const complete = layerCompletes.find(c => c.layerIndex === layer.layerIndex);
+                                const success = complete?.successful || 0;
+                                const failed = complete?.failed || 0;
+                                const duration = complete?.durationSeconds?.toFixed(1) || '?';
+                                return `
+                                    <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; min-width: 120px; border-left: 4px solid ${failed > 0 ? '#f44336' : '#4CAF50'};">
+                                        <div style="font-weight: bold; margin-bottom: 4px;">Layer ${layer.layerIndex}</div>
+                                        <div style="font-size: 12px; color: #666;">
+                                            ${layer.componentCount} components<br>
+                                            ${success} succeeded${failed > 0 ? `, ${failed} failed` : ''}<br>
+                                            ${duration}s
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Orchestration timeline visualization
+            if (subagentCount > 0) {
+                html += `<h4 style="margin: 25px 0 10px 0;">Orchestration Timeline</h4>`;
+                html += `<div id="orchestrationTimeline" style="background: white; border-radius: 8px; padding: 15px; overflow-x: auto;"></div>`;
+            }
+
+            overviewDiv.innerHTML = html;
+            container.appendChild(overviewDiv);
+
+            // Draw orchestration timeline SVG
+            if (subagentCount > 0) {
+                const timelineDiv = document.getElementById('orchestrationTimeline');
+                const svgWidth = Math.max(800, timelineDiv.offsetWidth - 30);
+                const barHeight = 25;
+                const svgHeight = (subagentCount + 1) * (barHeight + 5) + 60;
+
+                const svg = d3.select('#orchestrationTimeline')
+                    .append('svg')
+                    .attr('width', svgWidth)
+                    .attr('height', svgHeight);
+
+                const margin = { left: 200, right: 20, top: 30, bottom: 30 };
+                const width = svgWidth - margin.left - margin.right;
+
+                const xScale = d3.scaleTime()
+                    .domain([globalMinTime, globalMaxTime])
+                    .range([0, width]);
+
+                const g = svg.append('g')
+                    .attr('transform', `translate(${margin.left}, ${margin.top})`);
+
+                // X axis
+                g.append('g')
+                    .attr('transform', `translate(0, ${svgHeight - margin.top - margin.bottom})`)
+                    .call(d3.axisBottom(xScale).ticks(8).tickFormat(d => {
+                        const secs = (d - globalMinTime) / 1000;
+                        return `+${formatTime(secs)}`;
+                    }));
+
+                // Draw MAIN_AGENT bar first
+                const mainAgentTools = toolCallData.filter(d => d.agentId === 'MAIN_AGENT');
+                if (mainAgentTools.length > 0) {
+                    const mainStart = d3.min(mainAgentTools, d => d.timestamp);
+                    const mainEnd = d3.max(mainAgentTools, d => d.completeTimestamp || d.timestamp);
+                    
+                    g.append('rect')
+                        .attr('x', xScale(mainStart))
+                        .attr('y', 0)
+                        .attr('width', Math.max(2, xScale(mainEnd) - xScale(mainStart)))
+                        .attr('height', barHeight)
+                        .attr('fill', '#667eea')
+                        .attr('rx', 4);
+                    
+                    g.append('text')
+                        .attr('x', -10)
+                        .attr('y', barHeight / 2 + 4)
+                        .attr('text-anchor', 'end')
+                        .attr('font-size', '12px')
+                        .attr('font-weight', 'bold')
+                        .text('LEAD AGENT');
+                }
+
+                // Draw subagent bars
+                const sortedSubagents = Object.entries(subagentTimelines)
+                    .sort((a, b) => (a[1].spawn || globalMinTime) - (b[1].spawn || globalMinTime));
+
+                sortedSubagents.forEach(([agentId, data], idx) => {
+                    const y = (idx + 1) * (barHeight + 5);
+                    const start = data.spawn || globalMinTime;
+                    const end = data.complete || globalMaxTime;
+                    const color = data.complete ? '#43e97b' : '#ffa500';
+                    
+                    // Bar
+                    g.append('rect')
+                        .attr('x', xScale(start))
+                        .attr('y', y)
+                        .attr('width', Math.max(2, xScale(end) - xScale(start)))
+                        .attr('height', barHeight)
+                        .attr('fill', color)
+                        .attr('opacity', 0.7)
+                        .attr('rx', 4)
+                        .style('cursor', 'pointer')
+                        .on('mouseover', function(event) {
+                            d3.select(this).attr('opacity', 1);
+                            const tooltip = document.getElementById('tooltip');
+                            tooltip.style.display = 'block';
+                            const dur = data.duration || ((end - start) / 1000);
+                            const agentTokens = tokensByAgent[agentId] || { inputTokens: 0, outputTokens: 0 };
+                            const agentCost = (agentTokens.inputTokens / 1000000) * 3 + (agentTokens.outputTokens / 1000000) * 15;
+                            tooltip.innerHTML = `
+                                <div class="tooltip-title">${agentId}</div>
+                                <div class="tooltip-row"><span class="tooltip-label">Type:</span><span>${data.type || 'unknown'}</span></div>
+                                <div class="tooltip-row"><span class="tooltip-label">Duration:</span><span>${formatTime(dur)}</span></div>
+                                <div class="tooltip-row"><span class="tooltip-label">Tool Calls:</span><span>${data.toolCalls || 'N/A'}</span></div>
+                                <div class="tooltip-row"><span class="tooltip-label">Status:</span><span>${data.complete ? '✓ Complete' : '⏳ In Progress'}</span></div>
+                                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">
+                                    <div class="tooltip-row"><span class="tooltip-label">Input Tokens:</span><span>${formatTokens(agentTokens.inputTokens)}${isEstimated ? '*' : ''}</span></div>
+                                    <div class="tooltip-row"><span class="tooltip-label">Output Tokens:</span><span>${formatTokens(agentTokens.outputTokens)}${isEstimated ? '*' : ''}</span></div>
+                                    <div class="tooltip-row"><span class="tooltip-label">Est. Cost:</span><span style="font-weight: bold; color: #4CAF50;">$${agentCost.toFixed(3)}</span></div>
+                                </div>
+                                ${data.description ? `<div style="margin-top: 8px; font-size: 11px; color: #ccc;">${data.description}</div>` : ''}
+                            `;
+                            tooltip.style.left = event.pageX + 10 + 'px';
+                            tooltip.style.top = event.pageY + 10 + 'px';
+                        })
+                        .on('mouseout', function() {
+                            d3.select(this).attr('opacity', 0.7);
+                            document.getElementById('tooltip').style.display = 'none';
+                        });
+
+                    // Spawn marker
+                    if (data.spawn) {
+                        g.append('polygon')
+                            .attr('points', '0,-6 8,0 0,6')
+                            .attr('transform', `translate(${xScale(data.spawn)}, ${y + barHeight/2})`)
+                            .attr('fill', '#4CAF50');
+                    }
+
+                    // Complete marker
+                    if (data.complete) {
+                        g.append('rect')
+                            .attr('x', xScale(data.complete) - 4)
+                            .attr('y', y + barHeight/2 - 4)
+                            .attr('width', 8)
+                            .attr('height', 8)
+                            .attr('fill', '#f44336');
+                    }
+
+                    // Label (truncated)
+                    const shortId = agentId.length > 25 ? agentId.substring(0, 22) + '...' : agentId;
+                    g.append('text')
+                        .attr('x', -10)
+                        .attr('y', y + barHeight / 2 + 4)
+                        .attr('text-anchor', 'end')
+                        .attr('font-size', '11px')
+                        .text(shortId);
+                });
+            }
         }
 
         // Render timeline
@@ -1236,6 +1884,9 @@
                 `;
                 return;
             }
+
+            // Render session overview first
+            renderSessionOverview(container);
 
             // Group by agent
             const byAgent = d3.group(toolCallData, d => d.agentId);
@@ -1696,6 +2347,13 @@
             return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
 
+        // Helper function to format token counts (e.g., 1500 -> "1.5K", 1500000 -> "1.50M")
+        function formatTokens(n) {
+            if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
+            if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+            return n.toString();
+        }
+
         // Render lifespan
         function renderLifespan() {
             const svg = d3.select('#lifespanChart');
@@ -2050,7 +2708,7 @@
                 .attr('font-size', '11px')
                 .text('Tool Call');
 
-            // Text block marker
+            // LLM Response marker
             legendG.append('line')
                 .attr('x1', 5)
                 .attr('x2', 5)
@@ -2063,9 +2721,9 @@
                 .attr('x', 15)
                 .attr('y', 47)
                 .attr('font-size', '11px')
-                .text('Text Block');
+                .text('LLM Response');
 
-            // Thinking block marker
+            // Extended thinking marker (if applicable)
             legendG.append('line')
                 .attr('x1', 5)
                 .attr('x2', 5)
@@ -2079,9 +2737,9 @@
                 .attr('x', 15)
                 .attr('y', 65)
                 .attr('font-size', '11px')
-                .text('Thinking Block');
+                .text('Extended Thinking');
 
-            // Start marker
+            // Subagent spawn marker
             legendG.append('polygon')
                 .attr('points', '0,-4 8,0 0,4')
                 .attr('transform', `translate(5, 80)`)
@@ -2092,7 +2750,7 @@
                 .attr('x', 15)
                 .attr('y', 83)
                 .attr('font-size', '11px')
-                .text('Agent Start');
+                .text('Subagent Spawn');
 
             // End marker
             legendG.append('rect')
@@ -2107,7 +2765,22 @@
                 .attr('x', 15)
                 .attr('y', 100)
                 .attr('font-size', '11px')
-                .text('Agent End');
+                .text('Subagent Complete');
+
+            // Layer boundary marker (for parallel execution)
+            legendG.append('line')
+                .attr('x1', 0)
+                .attr('x2', 10)
+                .attr('y1', 115)
+                .attr('y2', 115)
+                .attr('stroke', '#FF9800')
+                .attr('stroke-width', 2)
+                .attr('stroke-dasharray', '5,3');
+            legendG.append('text')
+                .attr('x', 15)
+                .attr('y', 118)
+                .attr('font-size', '11px')
+                .text('Layer Boundary');
         }
 
         // Render analysis
@@ -3350,11 +4023,511 @@
             d3.select('#textByAgentChart').style('display', 'none');
         }
 
+        // Render reasoning pattern analysis
+        function renderReasoningPatterns() {
+            const container = document.getElementById('reasoningContainer');
+            const statsContainer = document.getElementById('reasoningStatsContainer');
+
+            if (!llmEventData || llmEventData.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px 20px; color: #666;">
+                        <h4>No LLM call data available</h4>
+                        <p>Run an agent session with the updated callbacks to see reasoning pattern analysis.</p>
+                        <p style="margin-top: 15px; font-size: 13px;">Reasoning patterns detected:</p>
+                        <ul style="text-align: left; max-width: 500px; margin: 15px auto; font-size: 13px;">
+                            <li><strong>one_shot</strong> - Single prompt, direct response</li>
+                            <li><strong>chain_of_thought</strong> - Step-by-step reasoning in system prompt</li>
+                            <li><strong>react</strong> - Interleaved reasoning and tool use</li>
+                            <li><strong>react_multi_step</strong> - Multiple tool use iterations</li>
+                            <li><strong>multi_turn</strong> - Conversation with prior context</li>
+                            <li><strong>extended_thinking</strong> - Claude's thinking blocks</li>
+                        </ul>
+                    </div>
+                `;
+                statsContainer.innerHTML = '';
+                return;
+            }
+
+            // Aggregate reasoning patterns
+            const patternCounts = {};
+            const patternsByAgent = {};
+            const patternTokens = {};
+            let totalThinkingTokens = 0;
+            let callsWithThinking = 0;
+
+            llmEventData.forEach(event => {
+                const pattern = event.reasoningPattern?.type || 'unknown';
+                const agentId = event.agentId || 'MAIN_AGENT';
+                
+                // Count patterns
+                patternCounts[pattern] = (patternCounts[pattern] || 0) + 1;
+                
+                // Track by agent
+                if (!patternsByAgent[agentId]) {
+                    patternsByAgent[agentId] = {};
+                }
+                patternsByAgent[agentId][pattern] = (patternsByAgent[agentId][pattern] || 0) + 1;
+                
+                // Track tokens by pattern
+                if (!patternTokens[pattern]) {
+                    patternTokens[pattern] = { input: 0, output: 0, count: 0 };
+                }
+                patternTokens[pattern].input += event.inputTokens || 0;
+                patternTokens[pattern].output += event.outputTokens || 0;
+                patternTokens[pattern].count += 1;
+                
+                // Track thinking/extended reasoning
+                if (event.responseAnalysis?.has_thinking) {
+                    callsWithThinking++;
+                    totalThinkingTokens += event.responseAnalysis.thinking_length / 4; // Estimate tokens
+                }
+                
+                // Override pattern if has extended thinking
+                if (event.responseAnalysis?.has_thinking && pattern !== 'unknown') {
+                    const thinkingPattern = pattern + '_with_thinking';
+                    patternCounts[thinkingPattern] = (patternCounts[thinkingPattern] || 0) + 1;
+                    patternCounts[pattern] = Math.max(0, (patternCounts[pattern] || 0) - 1);
+                }
+            });
+
+            // Calculate stats
+            const totalCalls = llmEventData.length;
+            const avgContextWindow = d3.mean(llmEventData, d => d.reasoningPattern?.context_window_estimate || 0);
+            const reactCalls = (patternCounts['react'] || 0) + (patternCounts['react_multi_step'] || 0);
+            const cotCalls = Object.entries(patternCounts)
+                .filter(([k]) => k.includes('chain_of_thought'))
+                .reduce((sum, [, v]) => sum + v, 0);
+
+            // Render stats
+            statsContainer.innerHTML = `
+                <div class="stat-card success">
+                    <div class="stat-label">Total LLM Calls</div>
+                    <div class="stat-value">${totalCalls}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">ReAct (Tool Loop)</div>
+                    <div class="stat-value">${reactCalls}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Chain-of-Thought</div>
+                    <div class="stat-value">${cotCalls}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Extended Thinking</div>
+                    <div class="stat-value">${callsWithThinking}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg Context Window</div>
+                    <div class="stat-value">${formatTokens(avgContextWindow || 0)}</div>
+                </div>
+            `;
+
+            // Pattern colors
+            const patternColors = {
+                'one_shot': '#90EE90',
+                'multi_turn': '#87CEEB',
+                'chain_of_thought': '#DDA0DD',
+                'react': '#FFB347',
+                'react_multi_step': '#FF6B6B',
+                'unknown': '#CCCCCC',
+            };
+
+            // Build visualization
+            let html = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div style="background: white; padding: 20px; border-radius: 8px;">
+                        <h4 style="margin: 0 0 15px 0;">Pattern Distribution</h4>
+                        <div id="patternPieChart"></div>
+                        <div style="margin-top: 15px;">
+                            ${Object.entries(patternCounts)
+                                .filter(([, count]) => count > 0)
+                                .sort((a, b) => b[1] - a[1])
+                                .map(([pattern, count]) => {
+                                    const pct = (count / totalCalls * 100).toFixed(1);
+                                    const color = patternColors[pattern.replace('_with_thinking', '')] || '#CCCCCC';
+                                    const label = pattern.replace(/_/g, ' ').replace('with thinking', '+ thinking');
+                                    return `
+                                        <div style="display: flex; align-items: center; margin: 8px 0;">
+                                            <div style="width: 16px; height: 16px; border-radius: 4px; background: ${color}; margin-right: 10px;"></div>
+                                            <div style="flex: 1;">${label}</div>
+                                            <div style="font-weight: bold;">${count} (${pct}%)</div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                        </div>
+                    </div>
+                    
+                    <div style="background: white; padding: 20px; border-radius: 8px;">
+                        <h4 style="margin: 0 0 15px 0;">Token Cost by Pattern</h4>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid #ddd;">
+                                    <th style="text-align: left; padding: 8px;">Pattern</th>
+                                    <th style="text-align: right; padding: 8px;">Calls</th>
+                                    <th style="text-align: right; padding: 8px;">Input</th>
+                                    <th style="text-align: right; padding: 8px;">Output</th>
+                                    <th style="text-align: right; padding: 8px;">Avg Cost/Call</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${Object.entries(patternTokens)
+                                    .sort((a, b) => (b[1].input + b[1].output) - (a[1].input + a[1].output))
+                                    .map(([pattern, data]) => {
+                                        const totalCost = (data.input / 1000000) * 3 + (data.output / 1000000) * 15;
+                                        const avgCost = data.count > 0 ? totalCost / data.count : 0;
+                                        const color = patternColors[pattern] || '#CCCCCC';
+                                        return `
+                                            <tr style="border-bottom: 1px solid #eee;">
+                                                <td style="padding: 8px;">
+                                                    <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: ${color}; margin-right: 8px;"></span>
+                                                    ${pattern.replace(/_/g, ' ')}
+                                                </td>
+                                                <td style="text-align: right; padding: 8px;">${data.count}</td>
+                                                <td style="text-align: right; padding: 8px;">${formatTokens(data.input)}</td>
+                                                <td style="text-align: right; padding: 8px;">${formatTokens(data.output)}</td>
+                                                <td style="text-align: right; padding: 8px; font-weight: bold;">$${avgCost.toFixed(4)}</td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div style="background: white; padding: 20px; border-radius: 8px; margin-top: 20px;">
+                    <h4 style="margin: 0 0 15px 0;">Reasoning Patterns by Agent</h4>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead style="position: sticky; top: 0; background: white;">
+                                <tr style="border-bottom: 2px solid #ddd;">
+                                    <th style="text-align: left; padding: 8px;">Agent</th>
+                                    ${Object.keys(patternColors).map(p => 
+                                        `<th style="text-align: center; padding: 8px; font-size: 11px;">${p.replace(/_/g, '<br>')}</th>`
+                                    ).join('')}
+                                    <th style="text-align: right; padding: 8px;">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${Object.entries(patternsByAgent)
+                                    .sort((a, b) => {
+                                        if (a[0] === 'MAIN_AGENT') return -1;
+                                        if (b[0] === 'MAIN_AGENT') return 1;
+                                        const aTotal = Object.values(a[1]).reduce((s, v) => s + v, 0);
+                                        const bTotal = Object.values(b[1]).reduce((s, v) => s + v, 0);
+                                        return bTotal - aTotal;
+                                    })
+                                    .slice(0, 20)
+                                    .map(([agentId, patterns]) => {
+                                        const total = Object.values(patterns).reduce((s, v) => s + v, 0);
+                                        return `
+                                            <tr style="border-bottom: 1px solid #eee;">
+                                                <td style="padding: 8px; font-weight: ${agentId === 'MAIN_AGENT' ? 'bold' : 'normal'};">
+                                                    ${agentId.length > 25 ? agentId.substring(0, 22) + '...' : agentId}
+                                                </td>
+                                                ${Object.keys(patternColors).map(p => {
+                                                    const count = patterns[p] || 0;
+                                                    const color = patternColors[p];
+                                                    return `<td style="text-align: center; padding: 8px;">
+                                                        ${count > 0 ? `<span style="background: ${color}; padding: 2px 8px; border-radius: 10px; font-size: 12px;">${count}</span>` : '-'}
+                                                    </td>`;
+                                                }).join('')}
+                                                <td style="text-align: right; padding: 8px; font-weight: bold;">${total}</td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                ${callsWithThinking > 0 ? `
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; margin-top: 20px;">
+                    <h4 style="margin: 0 0 10px 0;">Extended Thinking Analysis</h4>
+                    <p style="margin: 0; opacity: 0.9;">
+                        ${callsWithThinking} LLM calls used extended thinking blocks, generating approximately 
+                        <strong>${formatTokens(totalThinkingTokens)}</strong> thinking tokens.
+                        This deep reasoning mode helps with complex tasks but increases token usage.
+                    </p>
+                </div>
+                ` : ''}
+                
+                ${(patternCounts['unknown'] || 0) > 0 ? `
+                <div style="background: #FFF3CD; padding: 20px; border-radius: 8px; margin-top: 20px; border: 1px solid #FFC107;">
+                    <h4 style="margin: 0 0 10px 0; color: #856404;">Unknown Patterns Debug Info</h4>
+                    <p style="margin: 0 0 10px 0; color: #856404; font-size: 13px;">
+                        ${patternCounts['unknown']} LLM calls have unknown reasoning patterns. This may be due to:
+                    </p>
+                    <ul style="margin: 0 0 10px 0; color: #856404; font-size: 13px; padding-left: 20px;">
+                        <li>Legacy log format (before reasoning pattern tracking)</li>
+                        <li>LLM calls via completion API (non-chat) without pattern analysis</li>
+                        <li>Missing llm_start events (correlation failure)</li>
+                    </ul>
+                    <details style="margin-top: 10px;">
+                        <summary style="cursor: pointer; color: #856404; font-weight: bold;">Show unknown events (first 10)</summary>
+                        <pre style="background: white; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 11px; max-height: 300px; overflow: auto;">${
+                            JSON.stringify(
+                                llmEventData
+                                    .filter(e => !e.reasoningPattern?.type || e.reasoningPattern?.type === 'unknown')
+                                    .slice(0, 10)
+                                    .map(e => ({
+                                        runId: e.runId,
+                                        agentId: e.agentId,
+                                        model: e.model,
+                                        graphNode: e.graphNode,
+                                        hasReasoningPattern: !!e.reasoningPattern,
+                                        reasoningPatternType: e.reasoningPattern?.type || 'MISSING',
+                                        inputTokens: e.inputTokens,
+                                        timestamp: e.timestamp?.toISOString?.() || e.timestamp,
+                                    })),
+                                null, 2
+                            )
+                        }</pre>
+                    </details>
+                </div>
+                ` : ''}
+            `;
+
+            container.innerHTML = html;
+
+            // Draw pie chart
+            if (totalCalls > 0) {
+                const pieData = Object.entries(patternCounts)
+                    .filter(([, count]) => count > 0)
+                    .map(([pattern, count]) => ({
+                        pattern,
+                        count,
+                        color: patternColors[pattern.replace('_with_thinking', '')] || '#CCCCCC'
+                    }));
+
+                const pieWidth = 200;
+                const pieHeight = 200;
+                const radius = Math.min(pieWidth, pieHeight) / 2;
+
+                const svg = d3.select('#patternPieChart')
+                    .append('svg')
+                    .attr('width', pieWidth)
+                    .attr('height', pieHeight)
+                    .append('g')
+                    .attr('transform', `translate(${pieWidth/2}, ${pieHeight/2})`);
+
+                const pie = d3.pie().value(d => d.count);
+                const arc = d3.arc().innerRadius(40).outerRadius(radius - 10);
+
+                svg.selectAll('path')
+                    .data(pie(pieData))
+                    .join('path')
+                    .attr('d', arc)
+                    .attr('fill', d => d.data.color)
+                    .attr('stroke', 'white')
+                    .attr('stroke-width', 2)
+                    .style('cursor', 'pointer')
+                    .on('mouseover', function(event, d) {
+                        d3.select(this).attr('opacity', 0.8);
+                        const tooltip = document.getElementById('tooltip');
+                        tooltip.style.display = 'block';
+                        tooltip.innerHTML = `
+                            <div class="tooltip-title">${d.data.pattern.replace(/_/g, ' ')}</div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Count:</span>
+                                <span>${d.data.count}</span>
+                            </div>
+                            <div class="tooltip-row">
+                                <span class="tooltip-label">Percentage:</span>
+                                <span>${(d.data.count / totalCalls * 100).toFixed(1)}%</span>
+                            </div>
+                        `;
+                        tooltip.style.left = event.pageX + 10 + 'px';
+                        tooltip.style.top = event.pageY + 10 + 'px';
+                    })
+                    .on('mouseout', function() {
+                        d3.select(this).attr('opacity', 1);
+                        document.getElementById('tooltip').style.display = 'none';
+                    });
+            }
+        }
+
+        // Render LangGraph node transitions
+        function renderGraphNodes() {
+            const container = document.getElementById('graphNodeContainer');
+            const statsContainer = document.getElementById('graphStatsContainer');
+
+            if (!graphNodeData || graphNodeData.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px 20px; color: #666;">
+                        <h4>No graph node data available</h4>
+                        <p>Graph node transitions will appear here when using LangGraph callbacks.</p>
+                    </div>
+                `;
+                statsContainer.innerHTML = '';
+                return;
+            }
+
+            // Calculate statistics
+            const nodeStarts = graphNodeData.filter(d => d.event === 'graph_node_start');
+            const nodeEnds = graphNodeData.filter(d => d.event === 'graph_node_end');
+            const uniqueNodes = new Set(graphNodeData.map(d => d.nodeName));
+            const uniqueAgents = new Set(graphNodeData.map(d => d.agentId));
+
+            // Count transitions per node
+            const nodeCounts = {};
+            nodeStarts.forEach(d => {
+                nodeCounts[d.nodeName] = (nodeCounts[d.nodeName] || 0) + 1;
+            });
+
+            // Render stats
+            statsContainer.innerHTML = `
+                <div class="stat-card success">
+                    <div class="stat-label">Total Node Transitions</div>
+                    <div class="stat-value">${nodeStarts.length}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Unique Nodes</div>
+                    <div class="stat-value">${uniqueNodes.size}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Active Agents</div>
+                    <div class="stat-value">${uniqueAgents.size}</div>
+                </div>
+            `;
+
+            // Build node transition table
+            const sortedNodes = Object.entries(nodeCounts).sort((a, b) => b[1] - a[1]);
+
+            const nodeColors = {
+                'agent': '#4facfe',
+                'tools': '#43e97b',
+                'file_tools': '#43e97b',
+                'run_subagent': '#fa709a',
+                '__start__': '#ffd700',
+                '__end__': '#ff6b6b'
+            };
+
+            let html = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <h4 style="margin-bottom: 10px;">Node Execution Counts</h4>
+                        <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 6px; overflow: hidden;">
+                            <thead style="background: #f0f0f0;">
+                                <tr>
+                                    <th style="padding: 10px; text-align: left;">Node</th>
+                                    <th style="padding: 10px; text-align: center;">Count</th>
+                                    <th style="padding: 10px; text-align: left;">Bar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${sortedNodes.map(([node, count]) => {
+                                    const maxCount = sortedNodes[0][1];
+                                    const pct = (count / maxCount * 100).toFixed(0);
+                                    const color = nodeColors[node] || '#667eea';
+                                    return `
+                                        <tr style="border-bottom: 1px solid #eee;">
+                                            <td style="padding: 10px;">
+                                                <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${color}; margin-right: 8px;"></span>
+                                                <strong>${node}</strong>
+                                            </td>
+                                            <td style="padding: 10px; text-align: center; font-weight: bold;">${count}</td>
+                                            <td style="padding: 10px;">
+                                                <div style="background: #f0f0f0; border-radius: 4px; height: 20px; width: 200px;">
+                                                    <div style="background: ${color}; height: 100%; width: ${pct}%; border-radius: 4px;"></div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <h4 style="margin-bottom: 10px;">Node Transition Timeline</h4>
+                        <svg id="graphTimelineSvg" style="width: 100%;"></svg>
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML = html;
+
+            // Draw timeline visualization
+            const svg = d3.select('#graphTimelineSvg')
+                .attr('width', 600)
+                .attr('height', Math.max(200, uniqueNodes.size * 40 + 60));
+
+            const margin = { top: 20, right: 20, bottom: 30, left: 120 };
+            const width = 600 - margin.left - margin.right;
+            const height = svg.attr('height') - margin.top - margin.bottom;
+
+            const g = svg.append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+
+            // Time scale
+            const timeExtent = d3.extent(graphNodeData, d => d.timestamp);
+            const xScale = d3.scaleTime()
+                .domain(timeExtent)
+                .range([0, width]);
+
+            // Node scale
+            const nodes = Array.from(uniqueNodes).sort();
+            const yScale = d3.scaleBand()
+                .domain(nodes)
+                .range([0, height])
+                .padding(0.2);
+
+            // Axes
+            g.append('g')
+                .attr('transform', `translate(0,${height})`)
+                .call(d3.axisBottom(xScale).ticks(5))
+                .selectAll('text')
+                .style('font-size', '10px');
+
+            g.append('g')
+                .call(d3.axisLeft(yScale))
+                .selectAll('text')
+                .style('font-size', '10px');
+
+            // Draw node start events as points
+            g.selectAll('.node-event')
+                .data(nodeStarts)
+                .join('circle')
+                .attr('cx', d => xScale(d.timestamp))
+                .attr('cy', d => yScale(d.nodeName) + yScale.bandwidth() / 2)
+                .attr('r', 6)
+                .attr('fill', d => nodeColors[d.nodeName] || '#667eea')
+                .attr('opacity', 0.8)
+                .attr('stroke', '#333')
+                .attr('stroke-width', 1)
+                .style('cursor', 'pointer')
+                .on('mouseover', function(event, d) {
+                    const tooltip = document.getElementById('tooltip');
+                    tooltip.style.display = 'block';
+                    tooltip.innerHTML = `
+                        <div class="tooltip-title">Graph Node: ${d.nodeName}</div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Agent:</span>
+                            <span>${d.agentId}</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Time:</span>
+                            <span>${d.timestamp.toLocaleTimeString()}</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Graph ID:</span>
+                            <span>${d.graphId || 'N/A'}</span>
+                        </div>
+                    `;
+                    tooltip.style.left = event.pageX + 10 + 'px';
+                    tooltip.style.top = event.pageY + 10 + 'px';
+                })
+                .on('mouseout', () => {
+                    document.getElementById('tooltip').style.display = 'none';
+                });
+        }
+
         // Render all
         function renderAll() {
             renderStats();
             renderTimeline();
             renderLifespan();
+            renderReasoningPatterns();
+            renderGraphNodes();
             renderAnalysis();
             renderClustering();
             attachClusteringListeners();

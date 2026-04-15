@@ -1,0 +1,6 @@
+#!/Users/ethen/github-flashlight/.burr-ui-venv/bin/python3.12
+import sys
+from burr.cli.__main__ import cli_generate_demo_data
+if __name__ == '__main__':
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
+    sys.exit(cli_generate_demo_data())

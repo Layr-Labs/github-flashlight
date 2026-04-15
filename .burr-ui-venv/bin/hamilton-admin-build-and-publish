@@ -1,0 +1,6 @@
+#!/Users/ethen/github-flashlight/.burr-ui-venv/bin/python3.12
+import sys
+from hamilton.admin import build_and_publish
+if __name__ == '__main__':
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
+    sys.exit(build_and_publish())
