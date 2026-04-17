@@ -1,40 +1,40 @@
 """Dependency graph data structure with topological sorting."""
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict
 from collections import defaultdict, deque
 
 
 @dataclass
-class ApplicationEdge:
-    """Represents an interaction edge between two internal applications.
+class ComponentEdge:
+    """Represents an interaction edge between two components.
 
-    Populated during application analysis when code-analyzer subagents
-    discover internal application-to-application interactions (i.e. between
-    applications within the same codebase). External applications are tracked
-    on the Application dataclass itself.
+    Populated during analysis when code-analyzer subagents discover
+    internal component-to-component interactions within the same codebase.
     """
 
-    from_app: str  # Name of the calling application
-    to_app: str  # Name of the callee application
-    communication_protocol: List[str] = field(default_factory=list)  # e.g., ["HTTP", "HTTPS"], ["gRPC"], ["Message Queue"]
+    from_component: str  # Name of the calling component
+    to_component: str  # Name of the callee component
+    communication_protocol: List[str] = field(
+        default_factory=list
+    )  # e.g., ["HTTP", "HTTPS"], ["gRPC"], ["Message Queue"]
     description: str = ""  # Few sentence summary of the interaction
 
     def to_dict(self) -> dict:
         """Serialize to dictionary for JSON output."""
         return {
-            "from": self.from_app,
-            "to": self.to_app,
+            "from": self.from_component,
+            "to": self.to_component,
             "communication_protocol": self.communication_protocol,
             "description": self.description,
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ApplicationEdge":
+    def from_dict(cls, data: dict) -> "ComponentEdge":
         """Deserialize from dictionary."""
         return cls(
-            from_app=data["from"],
-            to_app=data["to"],
+            from_component=data["from"],
+            to_component=data["to"],
             communication_protocol=data.get("communication_protocol", []),
             description=data.get("description", ""),
         )
@@ -42,7 +42,7 @@ class ApplicationEdge:
 
 @dataclass
 class DependencyGraph:
-    """Directed graph representing component dependencies (libraries and applications)."""
+    """Directed graph representing component dependencies."""
 
     nodes: List[str] = field(default_factory=list)  # Component names
     edges: Dict[str, List[str]] = field(
@@ -68,20 +68,6 @@ class DependencyGraph:
     def get_dependents(self, component_name: str) -> List[str]:
         """Get components that depend on this component."""
         return [node for node in self.nodes if component_name in self.edges[node]]
-
-    def get_analysis_order(self) -> Tuple[List[str], List[str]]:
-        """
-        Get the two-phase analysis order (legacy interface).
-
-        Returns:
-            Tuple of (phase1_components, phase2_components_ordered)
-        """
-        depth_order = self.get_depth_order()
-        phase1 = depth_order[0] if depth_order else []
-        phase2 = []
-        for level in depth_order[1:]:
-            phase2.extend(level)
-        return (phase1, phase2)
 
     def get_depth_order(self) -> List[List[str]]:
         """
@@ -198,7 +184,9 @@ class DependencyGraph:
 
         return sccs
 
-    def _topological_sort(self, nodes: List[str], in_degree: Dict[str, int]) -> List[str]:
+    def _topological_sort(
+        self, nodes: List[str], in_degree: Dict[str, int]
+    ) -> List[str]:
         """
         Perform topological sort on a subset of nodes using Kahn's algorithm.
 

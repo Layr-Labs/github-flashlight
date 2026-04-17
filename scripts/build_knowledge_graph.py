@@ -28,12 +28,7 @@ from agent.schemas.knowledge_graph import KnowledgeGraph, KnowledgeGraphBuilder
 
 
 def load_components(discovery_dir: Path) -> list[Component]:
-    """Load components from discovery directory.
-
-    Supports both new unified format and legacy format for backward compat.
-    """
-    components: list[Component] = []
-
+    """Load components from discovery directory."""
     components_file = discovery_dir / "components.json"
     if not components_file.exists():
         raise FileNotFoundError(f"components.json not found in {discovery_dir}")
@@ -41,22 +36,14 @@ def load_components(discovery_dir: Path) -> list[Component]:
     with open(components_file) as f:
         data = json.load(f)
 
-    # Check format: new unified format has "components" key with kinds as subkeys
-    if "components" in data and isinstance(data["components"], dict):
-        # New unified format
-        for kind_str, kind_components in data["components"].items():
-            for comp_data in kind_components:
-                components.append(Component.from_dict(comp_data))
-    elif "libraries" in data or "applications" in data:
-        # Legacy format
-        for lib_data in data.get("libraries", []):
-            components.append(Component.from_dict(lib_data))
-        for app_data in data.get("applications", []):
-            components.append(Component.from_dict(app_data))
+    if isinstance(data, dict):
+        comp_list = data.get("components", [])
+    elif isinstance(data, list):
+        comp_list = data
     else:
         raise ValueError(f"Unknown components.json format in {discovery_dir}")
 
-    return components
+    return [Component.from_dict(c) for c in comp_list]
 
 
 def main():
