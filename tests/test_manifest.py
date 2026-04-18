@@ -4,7 +4,11 @@ import json
 import pytest
 from pathlib import Path
 
-from agent.schemas.manifest import ArtifactManifest, ArtifactFile, MANIFEST_SCHEMA_VERSION
+from agent.schemas.manifest import (
+    ArtifactManifest,
+    ArtifactFile,
+    MANIFEST_SCHEMA_VERSION,
+)
 
 
 class TestArtifactFile:
@@ -48,8 +52,7 @@ class TestArtifactManifest:
             model="claude-sonnet-4-20250514",
             source_repo="github.com/Layr-Labs/eigenda",
             source_commit="abc123",
-            libraries_count=12,
-            applications_count=7,
+            components_count=19,
             total_files=25,
             files=[
                 ArtifactFile(path="core.md", size_bytes=100, sha256="aaa"),
@@ -61,8 +64,7 @@ class TestArtifactManifest:
         assert m2.service_name == "eigenda"
         assert m2.artifact_version == 3
         assert m2.source_commit == "abc123"
-        assert m2.libraries_count == 12
-        assert m2.applications_count == 7
+        assert m2.components_count == 19
         assert len(m2.files) == 1
         assert m2.files[0].path == "core.md"
         assert m2.metadata == {"custom": "value"}
@@ -157,10 +159,12 @@ class TestArtifactManifest:
 
     def test_from_dict_defaults(self):
         """Minimal dict should deserialize with sensible defaults."""
-        m = ArtifactManifest.from_dict({
-            "service_name": "test",
-            "artifact_version": 1,
-        })
+        m = ArtifactManifest.from_dict(
+            {
+                "service_name": "test",
+                "artifact_version": 1,
+            }
+        )
         assert m.generated_at == ""
         assert m.model == ""
         assert m.files == []

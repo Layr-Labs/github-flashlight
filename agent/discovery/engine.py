@@ -48,7 +48,9 @@ def discover_components(
                 except Exception as e:
                     logger.warning(
                         "Failed to parse %s with %s plugin: %s",
-                        manifest_path, plugin.name, e,
+                        manifest_path,
+                        plugin.name,
+                        e,
                     )
                     continue
 
@@ -105,7 +107,8 @@ def _resolve_internal_deps(components: List[Component]) -> None:
                 else:
                     logger.debug(
                         "Could not resolve internal dep '%s' for %s",
-                        dep, comp.name,
+                        dep,
+                        comp.name,
                     )
         comp.internal_dependencies = resolved
 
@@ -125,15 +128,11 @@ def _detect_repo_shape(components: List[Component]) -> str:
 
 
 def _write_output(components: List[Component], output_dir: Path) -> None:
-    """Write components.json in the standard format."""
+    """Write components.json as a flat list of all components."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    libraries = [c for c in components if c.kind == ComponentKind.LIBRARY]
-    executables = [c for c in components if c.kind != ComponentKind.LIBRARY]
-
     output = {
-        "libraries": [c.to_dict() for c in libraries],
-        "applications": [c.to_dict() for c in executables],
+        "components": [c.to_dict() for c in components],
         "metadata": {
             "total_components": len(components),
             "by_kind": {
@@ -148,18 +147,7 @@ def _write_output(components: List[Component], output_dir: Path) -> None:
         },
     }
 
-    # Write combined components.json
     with open(output_dir / "components.json", "w") as f:
         json.dump(output, f, indent=2)
 
-    # Also write separate files for backward compat
-    with open(output_dir / "libraries.json", "w") as f:
-        json.dump({"libraries": [c.to_dict() for c in libraries]}, f, indent=2)
-
-    with open(output_dir / "applications.json", "w") as f:
-        json.dump({"applications": [c.to_dict() for c in executables]}, f, indent=2)
-
-    logger.info(
-        "Wrote %d components to %s (%d libraries, %d executables)",
-        len(components), output_dir, len(libraries), len(executables),
-    )
+    logger.info("Wrote %d components to %s", len(components), output_dir)

@@ -1,96 +1,62 @@
 """Dependency graph builder utility."""
 
-from typing import List, Tuple, Dict
+from typing import List, Dict
 from pathlib import Path
-from agent.schemas.core import Library, Application, ExternalDependency
+from agent.schemas.core import Component, ExternalDependency
 from agent.schemas.dependency_graph import DependencyGraph
 
 
 class DependencyGraphBuilder:
-    """Builds library dependency graphs from service definitions."""
+    """Builds component dependency graphs from discovered components."""
 
-    def __init__(self, libraries: List[Library]):
-        """Initialize with list of libraries."""
-        self.services = {lib.name: lib for lib in libraries}
+    def __init__(self, components: List[Component]):
+        """Initialize with list of components."""
+        self.components = {comp.name: comp for comp in components}
         self.graph = DependencyGraph()
         self._build_graph()
 
     def _build_graph(self):
-        """Build the library dependency graph."""
-        # Add all library nodes
-        for lib_name in self.services:
-            self.graph.add_node(lib_name)
+        """Build the component dependency graph."""
+        for name in self.components:
+            self.graph.add_node(name)
 
-        # Add edges for internal library dependencies
-        for lib_name, lib in self.services.items():
-            for dep in lib.internal_dependencies:
-                # Only add edge if dependency is an internal library
-                if dep in self.services:
-                    self.graph.add_edge(lib_name, dep)
+        for name, comp in self.components.items():
+            for dep in comp.internal_dependencies:
+                if dep in self.components:
+                    self.graph.add_edge(name, dep)
 
     def build(self) -> DependencyGraph:
         """Return the built dependency graph."""
         return self.graph
 
-    def get_analysis_order(self) -> Tuple[List[str], List[str]]:
-        """
-        Get two-phase analysis order.
-
-        Returns:
-            Tuple of (phase1_libraries, phase2_libraries_ordered)
-        """
-        return self.graph.get_analysis_order()
+    def get_depth_order(self) -> List[List[str]]:
+        """Get depth-ordered analysis buckets."""
+        return self.graph.get_depth_order()
 
     def save_graph_visualization(self, output_path: Path):
-        """Save markdown visualization of the library graph."""
-        phase1, phase2 = self.get_analysis_order()
+        """Save markdown visualization of the component graph."""
+        depth_order = self.get_depth_order()
 
         with open(output_path, "w") as f:
-            f.write("# Library Dependency Graph\n\n")
-            f.write("## Phase 1: Foundation Libraries (No Dependencies)\n\n")
-            if phase1:
-                for lib_name in phase1:
-                    lib = self.services[lib_name]
-                    f.write(f"### `{lib_name}`\n\n")
-                    f.write(f"- **Type**: {lib.type}\n")
-                    f.write(f"- **Path**: `{lib.root_path}`\n")
-                    if lib.description:
-                        f.write(f"- **Description**: {lib.description}\n")
-                    f.write(f"- **Dependencies**: None\n")
-                    if lib.external_dependencies:
-                        ext_parts = []
-                        for d in lib.external_dependencies[:5]:
-                            if isinstance(d, ExternalDependency):
-                                label = f"`{d.name}`"
-                                if d.version:
-                                    label += f" ({d.version})"
-                            else:
-                                label = f"`{d}`"
-                            ext_parts.append(label)
-                        ext = ", ".join(ext_parts)
-                        if len(lib.external_dependencies) > 5:
-                            ext += f" (+{len(lib.external_dependencies) - 5} more)"
-                        f.write(f"- **External Dependencies**: {ext}\n")
-                    f.write("\n")
-            else:
-                f.write("*(None)*\n\n")
-
-            f.write("## Phase 2: Dependent Libraries (Topological Order)\n\n")
-            if phase2:
-                for lib_name in phase2:
-                    lib = self.services[lib_name]
-                    deps = self.graph.get_direct_dependencies(lib_name)
-                    f.write(f"### `{lib_name}`\n\n")
-                    f.write(f"- **Type**: {lib.type}\n")
-                    f.write(f"- **Path**: `{lib.root_path}`\n")
-                    if lib.description:
-                        f.write(f"- **Description**: {lib.description}\n")
+            f.write("# Component Dependency Graph\n\n")
+            for depth, level in enumerate(depth_order):
+                f.write(f"## Depth {depth}\n\n")
+                for comp_name in level:
+                    comp = self.components[comp_name]
+                    deps = self.graph.get_direct_dependencies(comp_name)
+                    f.write(f"### `{comp_name}` ({comp.kind.value})\n\n")
+                    f.write(f"- **Type**: {comp.type}\n")
+                    f.write(f"- **Path**: `{comp.root_path}`\n")
+                    if comp.description:
+                        f.write(f"- **Description**: {comp.description}\n")
                     if deps:
                         dep_list = ", ".join(f"`{d}`" for d in deps)
                         f.write(f"- **Depends On**: {dep_list}\n")
-                    if lib.external_dependencies:
+                    else:
+                        f.write(f"- **Dependencies**: None\n")
+                    if comp.external_dependencies:
                         ext_parts = []
-                        for d in lib.external_dependencies[:5]:
+                        for d in comp.external_dependencies[:5]:
                             if isinstance(d, ExternalDependency):
                                 label = f"`{d.name}`"
                                 if d.version:
@@ -99,9 +65,7 @@ class DependencyGraphBuilder:
                                 label = f"`{d}`"
                             ext_parts.append(label)
                         ext = ", ".join(ext_parts)
-                        if len(lib.external_dependencies) > 5:
-                            ext += f" (+{len(lib.external_dependencies) - 5} more)"
+                        if len(comp.external_dependencies) > 5:
+                            ext += f" (+{len(comp.external_dependencies) - 5} more)"
                         f.write(f"- **External Dependencies**: {ext}\n")
                     f.write("\n")
-            else:
-                f.write("*(None)*\n\n")

@@ -5,11 +5,15 @@ subagent subgraphs. Uses TypedDict with LangGraph's Annotated reducers
 for message accumulation.
 """
 
+import os
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Dict, List, Optional, Sequence
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
+
+# Default model from environment variable
+DEFAULT_MODEL = os.environ.get("OPENROUTER_MODEL", "anthropic/claude-sonnet-4")
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +81,7 @@ class SubagentTask:
     description: str  # e.g., "Analyze the crypto library"
     prompt: str  # Full prompt to send to the subagent
     tools: List[str] = field(default_factory=list)  # Tool names this agent needs
-    model: str = "claude-sonnet-4-20250514"
+    model: str = field(default_factory=lambda: DEFAULT_MODEL)
 
     def to_dict(self) -> dict:
         return {
@@ -95,5 +99,5 @@ class SubagentTask:
             description=data["description"],
             prompt=data["prompt"],
             tools=data.get("tools", []),
-            model=data.get("model", "claude-sonnet-4-20250514"),
+            model=data.get("model", DEFAULT_MODEL),
         )

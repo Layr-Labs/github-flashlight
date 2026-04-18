@@ -1,4 +1,4 @@
-"""Tests for Component schema, backward compatibility, and ComponentKind."""
+"""Tests for Component schema and ComponentKind."""
 
 import pytest
 
@@ -8,8 +8,6 @@ from agent.schemas.core import (
     LanguageType,
     ExternalDependency,
     CodeCitation,
-    Library,
-    Application,
     component_from_dict,
 )
 
@@ -34,13 +32,10 @@ class TestComponentKind:
         assert ComponentKind.from_str("LIBRARY") == ComponentKind.LIBRARY
         assert ComponentKind.from_str("Service") == ComponentKind.SERVICE
 
-    def test_from_str_application_migration(self):
-        """Old 'application' classification maps to SERVICE."""
-        assert ComponentKind.from_str("application") == ComponentKind.SERVICE
-
     def test_from_str_unknown_fallback(self):
         assert ComponentKind.from_str("garbage") == ComponentKind.UNKNOWN
         assert ComponentKind.from_str("") == ComponentKind.UNKNOWN
+        assert ComponentKind.from_str("application") == ComponentKind.UNKNOWN
 
 
 class TestComponent:
@@ -77,34 +72,20 @@ class TestComponent:
         d = c.to_dict()
         assert d["kind"] == "service"
 
-    def test_to_dict_legacy_classification(self):
-        """to_dict includes backward-compat 'classification' field."""
+    def test_to_dict_no_classification(self):
+        """to_dict should not include legacy 'classification' field."""
         lib = Component(name="a", kind=ComponentKind.LIBRARY, type="t", root_path=".")
-        assert lib.to_dict()["classification"] == "library"
+        assert "classification" not in lib.to_dict()
 
         svc = Component(name="b", kind=ComponentKind.SERVICE, type="t", root_path=".")
-        assert svc.to_dict()["classification"] == "application"
-
-        cli = Component(name="c", kind=ComponentKind.CLI, type="t", root_path=".")
-        assert cli.to_dict()["classification"] == "application"
+        assert "classification" not in svc.to_dict()
 
     def test_from_dict_with_kind(self):
         d = {"name": "a", "kind": "cli", "type": "t", "root_path": "."}
         c = Component.from_dict(d)
         assert c.kind == ComponentKind.CLI
 
-    def test_from_dict_with_classification(self):
-        """Old format with 'classification' instead of 'kind'."""
-        d = {"name": "a", "classification": "library", "type": "t", "root_path": "."}
-        c = Component.from_dict(d)
-        assert c.kind == ComponentKind.LIBRARY
-
-    def test_from_dict_application_to_service(self):
-        d = {"name": "a", "classification": "application", "type": "t", "root_path": "."}
-        c = Component.from_dict(d)
-        assert c.kind == ComponentKind.SERVICE
-
-    def test_from_dict_no_kind_or_classification(self):
+    def test_from_dict_no_kind(self):
         d = {"name": "a", "type": "t", "root_path": "."}
         c = Component.from_dict(d)
         assert c.kind == ComponentKind.UNKNOWN
@@ -120,7 +101,9 @@ class TestComponent:
         svc = Component(name="b", kind=ComponentKind.SERVICE, type="t", root_path=".")
         cli = Component(name="c", kind=ComponentKind.CLI, type="t", root_path=".")
         fe = Component(name="d", kind=ComponentKind.FRONTEND, type="t", root_path=".")
-        contract = Component(name="e", kind=ComponentKind.CONTRACT, type="t", root_path=".")
+        contract = Component(
+            name="e", kind=ComponentKind.CONTRACT, type="t", root_path="."
+        )
 
         assert lib.is_executable is False
         assert svc.is_executable is True
@@ -134,82 +117,6 @@ class TestComponent:
         assert "manifest_path" not in d  # Empty string omitted
         assert "metadata" not in d  # Empty dict omitted
         assert "citations" not in d  # Empty list omitted
-        assert "libraries_used" not in d
-        assert "internal_applications" not in d
-
-
-class TestBackwardCompatLibrary:
-    def test_library_roundtrip(self):
-        from pathlib import Path
-        lib = Library(
-            name="core",
-            type="go-module",
-            root_path=Path("core"),
-            internal_dependencies=["common"],
-            external_dependencies=[ExternalDependency(name="serde")],
-        )
-        d = lib.to_dict()
-        lib2 = Library.from_dict(d)
-        assert lib2.name == "core"
-        assert lib2.internal_dependencies == ["common"]
-
-    def test_library_to_component(self):
-        from pathlib import Path
-        lib = Library(
-            name="core",
-            type="go-module",
-            root_path=Path("core"),
-            internal_dependencies=["common"],
-        )
-        c = lib.to_component()
-        assert isinstance(c, Component)
-        assert c.kind == ComponentKind.LIBRARY
-        assert c.name == "core"
-        assert c.internal_dependencies == ["common"]
-
-    def test_library_dict_has_kind(self):
-        from pathlib import Path
-        lib = Library(name="a", type="t", root_path=Path("."))
-        d = lib.to_dict()
-        assert d["kind"] == "library"
-        assert d["classification"] == "library"
-
-
-class TestBackwardCompatApplication:
-    def test_application_roundtrip(self):
-        from pathlib import Path
-        app = Application(
-            name="server",
-            type="go-module",
-            root_path=Path("cmd/server"),
-            libraries_used=["core", "common"],
-            internal_applications=["worker"],
-        )
-        d = app.to_dict()
-        app2 = Application.from_dict(d)
-        assert app2.name == "server"
-        assert app2.libraries_used == ["core", "common"]
-        assert app2.internal_applications == ["worker"]
-
-    def test_application_to_component(self):
-        from pathlib import Path
-        app = Application(
-            name="server",
-            type="go-module",
-            root_path=Path("cmd/server"),
-            libraries_used=["core"],
-        )
-        c = app.to_component()
-        assert isinstance(c, Component)
-        assert c.kind == ComponentKind.SERVICE
-        assert c.libraries_used == ["core"]
-
-    def test_application_dict_has_kind(self):
-        from pathlib import Path
-        app = Application(name="a", type="t", root_path=Path("."))
-        d = app.to_dict()
-        assert d["kind"] == "service"
-        assert d["classification"] == "application"
 
 
 class TestComponentFromDict:
@@ -227,12 +134,14 @@ class TestExternalDependency:
         assert d.version == ""
 
     def test_from_dict_full(self):
-        d = ExternalDependency.from_dict({
-            "name": "tokio",
-            "version": "1.35",
-            "category": "async-runtime",
-            "purpose": "Async runtime",
-        })
+        d = ExternalDependency.from_dict(
+            {
+                "name": "tokio",
+                "version": "1.35",
+                "category": "async-runtime",
+                "purpose": "Async runtime",
+            }
+        )
         assert d.name == "tokio"
         assert d.version == "1.35"
         assert d.category == "async-runtime"

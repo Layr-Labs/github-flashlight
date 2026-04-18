@@ -1,0 +1,115 @@
+Analyze the {component_name} component.
+
+Component Information:
+- Name: {component_name}
+- Kind: {component_kind}
+- Type: {component_type}
+- Location: {component_path}
+- Description: {component_description}
+
+**Working Directory**: All source code is located at `/tmp/{SERVICE_NAME}/project/`
+- Use Glob, Grep, and Read tools to analyze code within this directory
+- The component_path is relative to `/tmp/{SERVICE_NAME}/project/`
+
+This component has NO internal dependencies.
+
+**KIND-SPECIFIC ANALYSIS**
+
+Based on the component kind ({component_kind}), focus your analysis appropriately:
+
+- **library**: Focus on public API surface, reusable patterns, and how other components would consume this.
+- **service**: Focus on endpoints, request handling, runtime behavior, external system integrations.
+- **cli**: Focus on command structure, argument parsing, user-facing behavior, exit codes.
+- **contract**: Focus on interface definitions, state management, security constraints, gas/cost considerations.
+- **infra**: Focus on resource definitions, dependencies between resources, deployment topology.
+- **pipeline**: Focus on data flow stages, scheduling, failure handling, data transformations.
+- **frontend**: Focus on component hierarchy, state management, API consumption, user interactions.
+
+**ANALYSIS STRUCTURE**
+
+Perform deep analysis covering:
+
+1. **Architecture**: Overall design patterns and structure
+2. **Key Components**: Major modules, structs, classes, functions (5-12 items)
+3. **Data Flows**: Important data paths and control flows (with Mermaid diagrams)
+4. **External Dependencies** (CRITICAL — see detailed instructions below)
+5. **API Surface**: Public interfaces exposed to other components or users
+
+For services/applications, also include:
+6. **External Systems**: Infrastructure and cloud services this component connects to at runtime
+7. **Component Interactions**: Calls to other components in this codebase (HTTP, gRPC, shared DB, etc.)
+
+**EXTERNAL DEPENDENCY ANALYSIS — REQUIRED**
+
+You MUST thoroughly document ALL third-party dependencies. Do NOT skip or summarize.
+
+Steps:
+1. Read the manifest file (Cargo.toml, package.json, pyproject.toml, go.mod) to get the
+   complete list of third-party dependencies with their version constraints.
+2. For EACH external dependency, document:
+   - **Name**: Exact package name
+   - **Version**: Version constraint from the manifest
+   - **Category**: Classify as one of: web-framework, database, serialization, async-runtime,
+     crypto, networking, logging, testing, cli, build-tool, cloud-sdk, blockchain, monitoring, other
+   - **Purpose**: 1-2 sentences on what this package provides and HOW this component uses it
+   - **Integration points**: Which modules/files import or use this dependency
+3. Use Grep to find actual usage patterns in the codebase
+4. Distinguish between runtime dependencies and dev dependencies
+
+Format:
+```
+## Dependencies
+
+### External Libraries
+
+- **serde** (1.0) [serialization]: Provides derive macros for serializing/deserializing
+  data structures. Used across all public types via `#[derive(Serialize, Deserialize)]`.
+  Imported in: `src/types.rs`, `src/config.rs`.
+```
+
+**STRUCTURED OUTPUT — REQUIRED**
+
+At the end of your Markdown analysis, include two JSON blocks:
+
+1. `## Analysis Data` — Structured analysis results:
+```json
+{
+  "summary": "One paragraph summary of what this component does",
+  "architecture_pattern": "e.g., hexagonal, layered, event-driven",
+  "key_modules": [
+    {"name": "ModuleName", "path": "src/module.rs", "description": "What it does"}
+  ],
+  "api_endpoints": [
+    {"path": "/api/endpoint", "method": "GET", "description": "What it does"}
+  ],
+  "data_flows": [
+    {"name": "Request Flow", "steps": ["Step 1", "Step 2", "Step 3"]}
+  ],
+  "tech_stack": ["rust", "actix-web", "postgresql"],
+  "external_integrations": [
+    {"service": "postgresql", "category": "database", "description": "Primary data store"}
+  ],
+  "component_interactions": [
+    {"target": "other-component", "type": "calls", "protocol": "http", "description": "..."}
+  ]
+}
+```
+
+2. `## Citations` — Source code provenance:
+```json
+[
+  {
+    "file_path": "src/handler.rs",
+    "start_line": 42,
+    "end_line": 56,
+    "claim": "The analysis claim this citation supports",
+    "section": "Key Components"
+  }
+]
+```
+
+Aim for 10-30 citations linking your analysis claims to specific source code locations.
+Only cite line numbers you actually observed — never guess.
+
+Save your analysis to:
+- /tmp/{SERVICE_NAME}/service_analyses/{component_name}.md

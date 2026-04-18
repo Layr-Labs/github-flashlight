@@ -80,9 +80,8 @@ def validate_graph(
     """
     errors: List[str] = []
     name_set = {c.name for c in components}
-    library_names = {c.name for c in components if c.is_library}
 
-    # Every library should be in the depth order
+    # Every component should appear in exactly one depth level
     all_ordered = set()
     for level in depth_order:
         for name in level:
@@ -90,9 +89,9 @@ def validate_graph(
                 errors.append(f"Component '{name}' appears in multiple depth levels")
             all_ordered.add(name)
 
-    missing = library_names - all_ordered
+    missing = name_set - all_ordered
     if missing:
-        errors.append(f"Libraries missing from depth order: {missing}")
+        errors.append(f"Components missing from depth order: {missing}")
 
     # Validate topological property: for each component at depth N,
     # all its dependencies should be at depth < N

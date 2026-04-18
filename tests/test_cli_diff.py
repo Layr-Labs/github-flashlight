@@ -35,54 +35,56 @@ class TestLoadManifest:
         assert load_manifest(tmp_path) is None
 
     def test_valid_manifest(self, repo):
-        repo.write_json("manifest.json", {
-            "service_name": "myapp",
-            "artifact_version": 3,
-            "source_commit": "abc123",
-        })
+        repo.write_json(
+            "manifest.json",
+            {
+                "service_name": "myapp",
+                "artifact_version": 3,
+                "source_commit": "abc123",
+            },
+        )
         result = load_manifest(repo.root)
         assert result["service_name"] == "myapp"
         assert result["artifact_version"] == 3
         assert result["source_commit"] == "abc123"
 
     def test_manifest_without_source_commit(self, repo):
-        repo.write_json("manifest.json", {
-            "service_name": "myapp",
-            "artifact_version": 1,
-        })
+        repo.write_json(
+            "manifest.json",
+            {
+                "service_name": "myapp",
+                "artifact_version": 1,
+            },
+        )
         result = load_manifest(repo.root)
         assert result is not None
         assert result.get("source_commit", "") == ""
 
 
 class TestLoadComponents:
-    def test_combined_components_json(self, repo):
-        repo.write_json("service_discovery/components.json", {
-            "libraries": [
-                {"name": "core", "root_path": "core"},
-                {"name": "utils", "root_path": "utils"},
-            ],
-            "applications": [
-                {"name": "server", "root_path": "cmd/server"},
-            ],
-        })
+    def test_components_json(self, repo):
+        repo.write_json(
+            "service_discovery/components.json",
+            {
+                "components": [
+                    {"name": "core", "kind": "library", "root_path": "core"},
+                    {"name": "utils", "kind": "library", "root_path": "utils"},
+                    {"name": "server", "kind": "service", "root_path": "cmd/server"},
+                ],
+            },
+        )
         comps = load_components(repo.root)
         assert len(comps) == 3
         names = {c["name"] for c in comps}
         assert names == {"core", "utils", "server"}
 
-    def test_separate_files(self, repo):
-        repo.write_json("service_discovery/libraries.json", {
-            "libraries": [{"name": "core", "root_path": "core"}],
-        })
-        repo.write_json("service_discovery/applications.json", {
-            "applications": [{"name": "server", "root_path": "cmd/server"}],
-        })
-        comps = load_components(repo.root)
-        assert len(comps) == 2
-
-    def test_empty_directory(self, repo):
-        (repo.root / "service_discovery").mkdir(parents=True)
+    def test_empty_components(self, repo):
+        repo.write_json(
+            "service_discovery/components.json",
+            {
+                "components": [],
+            },
+        )
         comps = load_components(repo.root)
         assert comps == []
 
@@ -91,9 +93,12 @@ class TestLoadComponents:
         assert comps == []
 
     def test_array_format_fallback(self, repo):
-        repo.write_json("service_discovery/libraries.json", [
-            {"name": "core", "root_path": "core"},
-        ])
+        repo.write_json(
+            "service_discovery/components.json",
+            [
+                {"name": "core", "root_path": "core"},
+            ],
+        )
         comps = load_components(repo.root)
         assert len(comps) == 1
 
@@ -181,13 +186,15 @@ class TestComputeDiffContext:
     @patch("agent.cli.git_diff_files")
     def test_incremental_with_changes(self, mock_diff, repo):
         mock_diff.return_value = ["core/types.go", "api/server.go"]
-        repo.write_json("service_discovery/components.json", {
-            "libraries": [
-                {"name": "core", "root_path": "core"},
-                {"name": "api", "root_path": "api"},
-            ],
-            "applications": [],
-        })
+        repo.write_json(
+            "service_discovery/components.json",
+            {
+                "components": [
+                    {"name": "core", "kind": "library", "root_path": "core"},
+                    {"name": "api", "kind": "service", "root_path": "api"},
+                ],
+            },
+        )
 
         result = compute_diff_context(repo.root, repo.root, "old_sha", "new_sha")
         assert result["mode"] == "incremental"
@@ -198,10 +205,14 @@ class TestComputeDiffContext:
     @patch("agent.cli.git_diff_files")
     def test_incremental_with_unmapped(self, mock_diff, repo):
         mock_diff.return_value = ["core/types.go", "newpkg/foo.go"]
-        repo.write_json("service_discovery/components.json", {
-            "libraries": [{"name": "core", "root_path": "core"}],
-            "applications": [],
-        })
+        repo.write_json(
+            "service_discovery/components.json",
+            {
+                "components": [
+                    {"name": "core", "kind": "library", "root_path": "core"},
+                ],
+            },
+        )
 
         result = compute_diff_context(repo.root, repo.root, "old", "new")
         assert result["mode"] == "incremental"
@@ -211,10 +222,14 @@ class TestComputeDiffContext:
     @patch("agent.cli.git_diff_files")
     def test_no_changes(self, mock_diff, repo):
         mock_diff.return_value = []
-        repo.write_json("service_discovery/components.json", {
-            "libraries": [{"name": "core", "root_path": "core"}],
-            "applications": [],
-        })
+        repo.write_json(
+            "service_discovery/components.json",
+            {
+                "components": [
+                    {"name": "core", "kind": "library", "root_path": "core"},
+                ],
+            },
+        )
 
         result = compute_diff_context(repo.root, repo.root, "old", "new")
         # Empty diff → full analysis (safety fallback)

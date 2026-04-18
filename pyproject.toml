@@ -13,6 +13,7 @@ dependencies = [
     "langchain-openai>=0.3.0",
     "langchain-core>=0.3.0",
     "python-dotenv>=1.0.0",
+    "burr[start]>=0.40.2",
 ]
 
 [project.optional-dependencies]

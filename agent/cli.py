@@ -29,7 +29,7 @@ from pathlib import Path
 from agent.discovery.engine import discover_components
 from agent.discovery.validator import validate_discovery, validate_graph
 from agent.schemas.core import Component, ComponentKind
-from agent.schemas.dependency_graph import DependencyGraph
+from agent.schemas.knowledge_graph import KnowledgeGraphBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -49,36 +49,19 @@ def load_manifest(artifacts_dir: Path) -> dict | None:
 
 
 def load_components(artifacts_dir: Path) -> list[dict]:
-    """Load components from service_discovery in an existing artifacts directory.
-
-    Merges both 'libraries' and 'applications' arrays from components.json,
-    falling back to separate libraries.json / applications.json files.
-    """
-    components = []
-
-    # Try components.json first (combined format)
+    """Load components from service_discovery in an existing artifacts directory."""
     combined = artifacts_dir / "service_discovery" / "components.json"
-    if combined.exists():
-        with open(combined) as f:
-            data = json.load(f)
-        components.extend(data.get("libraries", []))
-        components.extend(data.get("applications", []))
-        return components
+    if not combined.exists():
+        return []
 
-    # Fall back to separate files
-    for filename in ("libraries.json", "applications.json"):
-        path = artifacts_dir / "service_discovery" / filename
-        if path.exists():
-            with open(path) as f:
-                data = json.load(f)
-            # Handle both array and object-with-key formats
-            if isinstance(data, list):
-                components.extend(data)
-            elif isinstance(data, dict):
-                for key in ("libraries", "applications"):
-                    components.extend(data.get(key, []))
+    with open(combined) as f:
+        data = json.load(f)
 
-    return components
+    if isinstance(data, dict):
+        return data.get("components", [])
+    if isinstance(data, list):
+        return data
+    return []
 
 
 def git_diff_files(repo_path: Path, last_sha: str, head_sha: str) -> list[str]:
@@ -190,7 +173,8 @@ def build_analysis_prompt(
     # Tell the LLM that discovery has already been done
     work_dir = Path(f"/tmp/{service_name}")
     discovery_file = work_dir / "service_discovery" / "components.json"
-    graph_file = work_dir / "dependency_graphs" / "library_graph.json"
+    graph_file = work_dir / "dependency_graphs" / "graph.json"
+    analysis_order_file = work_dir / "dependency_graphs" / "analysis_order.json"
 
     if discovery_file.exists():
         prompt += (
@@ -198,12 +182,14 @@ def build_analysis_prompt(
             f"\nRead the component inventory at: {discovery_file}"
         )
         if graph_file.exists():
-            prompt += f"\nRead the dependency graph at: {graph_file}"
+            prompt += f"\nRead the unified knowledge graph at: {graph_file}"
+        if analysis_order_file.exists():
+            prompt += f"\nRead the analysis order at: {analysis_order_file}"
         prompt += (
-            "\n\nSKIP Phase 0.2 (library discovery) and Phase 1.1 (application discovery)."
-            "\nThe components.json and library_graph.json are already populated."
-            "\nStart directly with Phase 1.2 (library analysis) using the depth order"
-            "\nfrom the graph file. Spawn code-library-analyzer subagents for each library."
+            "\n\nSKIP discovery phases — components.json and graph.json are already populated."
+            "\nStart directly with component analysis using the depth order from analysis_order.json."
+            "\nSpawn component-analyzer subagents for each component, processing depth levels in order."
+            "\nAll components at the same depth level can be analyzed in parallel."
         )
 
     if diff_context["mode"] == "incremental":
@@ -266,10 +252,8 @@ def analyze(
     """
     # Late imports for heavy deps
     from dotenv import load_dotenv
-    from langchain_core.messages import HumanMessage
 
-    from agent.callbacks import FlashlightCallbackHandler
-    from agent.graph import build_lead_graph
+    from agent.burr_app import build_interactive_agent, build_analysis_pipeline
     from agent.utils.transcript import setup_session, TranscriptWriter
     from agent.utils.template_loader import TemplateLoader
 
@@ -342,126 +326,65 @@ def analyze(
         for err in errors[:5]:
             print(f"    - {err}")
 
-    # Build dependency graph
-    libraries = [c for c in components if c.is_library]
-    if libraries:
-        graph = DependencyGraph()
-        for lib in libraries:
-            graph.add_node(lib.name)
-        for lib in libraries:
-            for dep in lib.internal_dependencies:
-                if dep in {l.name for l in libraries}:
-                    graph.add_edge(lib.name, dep)
+    # Build unified knowledge graph (all components, not just libraries)
+    print("\n  Building unified knowledge graph...")
+    graph_builder = KnowledgeGraphBuilder(components)
+    knowledge_graph = graph_builder.build(
+        source_repo=str(repo),
+        source_commit=head_sha,
+    )
+    depth_order = graph_builder.get_analysis_order()
 
-        depth_order = graph.get_depth_order()
-        graph_errors = validate_graph(components, depth_order)
-        if graph_errors:
-            print(f"  Graph warnings: {len(graph_errors)}")
+    # Validate graph
+    graph_errors = validate_graph(components, depth_order)
+    if graph_errors:
+        print(f"  Graph warnings: {len(graph_errors)}")
 
-        # Write graph
-        graph_dir.mkdir(parents=True, exist_ok=True)
-        phase1, phase2 = graph.get_analysis_order()
-        graph_json = {
-            "graph_type": "library_dependencies",
-            "nodes": [
-                {
-                    "id": lib.name,
-                    "type": lib.type,
-                    "kind": lib.kind.value,
-                    "phase": 1 if lib.name in phase1 else 2,
-                }
-                for lib in libraries
-            ],
-            "edges": [
-                {"from": name, "to": dep}
-                for name in graph.nodes
-                for dep in graph.get_direct_dependencies(name)
-            ],
-            "depth_order": [list(level) for level in depth_order],
-            "analysis_order": {"phase1": phase1, "phase2": phase2},
-        }
-        with open(graph_dir / "library_graph.json", "w") as f:
-            json.dump(graph_json, f, indent=2)
+    # Write graph
+    graph_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"  Dependency graph: {len(depth_order)} depth levels")
-        for i, level in enumerate(depth_order):
-            print(f"    depth {i}: {', '.join(level[:6])}", end="")
-            if len(level) > 6:
-                print(f" (+{len(level) - 6} more)")
-            else:
-                print()
-    else:
-        print("  No libraries found — skipping dependency graph")
+    # Write unified graph.json
+    with open(graph_dir / "graph.json", "w") as f:
+        json.dump(knowledge_graph.to_dict(), f, indent=2)
+
+    # Also write analysis_order.json for the lead agent
+    analysis_order = {
+        "depth_levels": depth_order,
+        "total_components": len(components),
+        "level_count": len(depth_order),
+        "by_kind": {
+            kind.value: sum(1 for c in components if c.kind == kind)
+            for kind in ComponentKind
+            if any(c.kind == kind for c in components)
+        },
+    }
+    with open(graph_dir / "analysis_order.json", "w") as f:
+        json.dump(analysis_order, f, indent=2)
+
+    print(
+        f"  Knowledge graph: {len(components)} components, {len(knowledge_graph.edges)} edges"
+    )
+    print(f"  Analysis order: {len(depth_order)} depth levels")
+    for i, level in enumerate(depth_order):
+        by_kind = {}
+        for name in level:
+            comp = knowledge_graph.components.get(name)
+            if comp:
+                by_kind.setdefault(comp.kind.value, []).append(name)
+        kind_summary = ", ".join(f"{k}:{len(v)}" for k, v in sorted(by_kind.items()))
+        print(f"    depth {i}: {len(level)} components ({kind_summary})")
 
     print()
 
-    # Build the prompt
-    artifacts_dir = output if output.exists() else None
-    prompt = build_analysis_prompt(
-        repo, service_name, diff_context, artifacts_dir, head_sha
-    )
-
-    # Setup session
+    # Setup session for transcript
     transcript_file, session_dir = setup_session()
     transcript = TranscriptWriter(transcript_file)
 
-    # Load prompts (same as interactive mode)
-    prompts_dir = Path(__file__).parent / "prompts"
-
-    def load_prompt(filename: str) -> str:
-        with open(prompts_dir / filename, "r", encoding="utf-8") as f:
-            return f.read().strip()
-
-    lead_agent_prompt = load_prompt("lead_agent.txt")
-    base_code_analyzer_prompt = load_prompt("code_analyzer.txt")
-    architecture_documenter_prompt = load_prompt(
-        "subagents/architecture_documenter.txt"
-    )
-    external_service_analyzer_prompt = load_prompt(
-        "subagents/external_service_analyzer.txt"
-    )
-
-    # Load templates
-    templates_dir = Path(__file__).parent.parent / "templates" / "analysis-template"
-    template_loader = TemplateLoader(templates_dir)
-    template_instructions = template_loader.get_template_instructions()
-    application_template = template_loader.get_template("application")
-    package_template = template_loader.get_template("package")
-
-    code_analyzer_prompt = f"""{base_code_analyzer_prompt}
-
-{template_instructions}
-
-<application_analysis_template>
-{application_template}
-</application_analysis_template>
-
-<package_analysis_template>
-{package_template}
-</package_analysis_template>
-"""
-
-    # Build agent prompts map
-    agent_prompts = {
-        "code-library-analyzer": code_analyzer_prompt,
-        "application-analyzer": code_analyzer_prompt,
-        "architecture-documenter": architecture_documenter_prompt,
-        "external-service-analyzer": external_service_analyzer_prompt,
-    }
-
-    # Initialize callback handler
-    callback_handler = FlashlightCallbackHandler(
-        transcript_writer=transcript,
-        session_dir=session_dir,
-        verbose=False,
-    )
-
-    # Build the lead agent graph
-    lead_graph = build_lead_graph(
-        system_prompt=lead_agent_prompt,
-        agent_prompts=agent_prompts,
-        model_name="anthropic/claude-sonnet-4-20250514",
-        callback_handler=callback_handler,
+    # Build the Burr analysis pipeline (structured multi-agent workflow)
+    # The pipeline loads prompts internally based on component kind
+    app = build_analysis_pipeline(
+        service_name=service_name,
+        project_name=f"flashlight-{service_name}",
     )
 
     print(f"\nStarting {mode_label} analysis of {service_name}...")
@@ -471,28 +394,37 @@ def analyze(
         print(f"  Last SHA: {last_sha}")
     if head_sha:
         print(f"  Head SHA: {head_sha}")
+    print(
+        "  Burr UI: http://localhost:7241  (run '.burr-ui-venv/bin/python -m uvicorn burr.tracking.server.run:app --port 7241' to start)"
+    )
     print()
 
     try:
-        # Send the analysis prompt
-        transcript.write_to_file(f"\nPrompt: {prompt}\n")
+        transcript.write_to_file(f"\nAnalyzing {service_name}...\n")
 
-        result = lead_graph.invoke(
-            {
-                "messages": [HumanMessage(content=prompt)],
-                "subagent_results": {},
+        # Run the Burr analysis pipeline
+        # The pipeline: receive_input -> read_discovery -> analyze_current_depth (loop) -> synthesize -> respond
+        action, result, state = app.run(
+            halt_after=["respond"],
+            inputs={
+                "task": f"Analyze {service_name}",
                 "service_name": service_name,
-                "repo_path": str(repo),
             },
-            config={"callbacks": [callback_handler]},
         )
 
+        # Get the response
+        response = state.get("final_response", "")
+        transcript.write_to_file(f"\nResponse: {response}\n")
+
+        # Count tokens from component analyses
+        analyses = state.get("component_analyses", {})
+        total_components = len(analyses)
+
         transcript.write("\n")
-        print(f"\nAnalysis complete ({callback_handler.api_call_count} API calls)")
+        print(f"\nAnalysis complete ({total_components} components analyzed)")
 
     finally:
         transcript.close()
-        callback_handler.close()
 
     # Copy artifacts from /tmp/{service_name}/ to output_dir
     tmp_artifacts = Path(f"/tmp/{service_name}")
@@ -571,6 +503,47 @@ def analyze(
 # ---------------------------------------------------------------------------
 
 
+def clone_repo(url: str, target_dir: Path) -> Path:
+    """Clone a git repository to a target directory.
+
+    Args:
+        url: Git repository URL (https://github.com/org/repo)
+        target_dir: Directory to clone into
+
+    Returns:
+        Path to the cloned repository
+    """
+    import subprocess
+    import re
+
+    # Extract repo name from URL
+    match = re.search(r"/([^/]+?)(?:\.git)?$", url)
+    if not match:
+        raise ValueError(f"Could not extract repo name from URL: {url}")
+
+    repo_name = match.group(1)
+    repo_path = target_dir / repo_name
+
+    if repo_path.exists():
+        print(f"  Repository already exists at {repo_path}, pulling latest...")
+        subprocess.run(
+            ["git", "pull"],
+            cwd=repo_path,
+            check=True,
+            capture_output=True,
+        )
+    else:
+        print(f"  Cloning {url} to {repo_path}...")
+        target_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["git", "clone", "--depth", "1", url, str(repo_path)],
+            check=True,
+            capture_output=True,
+        )
+
+    return repo_path
+
+
 def main():
     """CLI entry point for headless analysis."""
     parser = argparse.ArgumentParser(
@@ -580,7 +553,7 @@ def main():
     parser.add_argument(
         "--repo",
         required=True,
-        help="Path to the cloned repository to analyze",
+        help="Path to local repository OR GitHub URL to clone",
     )
     parser.add_argument(
         "--output",
@@ -629,8 +602,19 @@ def main():
         datefmt="%H:%M:%S",
     )
 
+    # Handle GitHub URLs - clone to /tmp
+    repo_path = args.repo
+    if (
+        repo_path.startswith("http://")
+        or repo_path.startswith("https://")
+        or repo_path.startswith("git@")
+    ):
+        print("Detected repository URL, cloning...")
+        clone_dir = Path("/tmp/flashlight-repos")
+        repo_path = str(clone_repo(repo_path, clone_dir))
+
     analyze(
-        repo_path=args.repo,
+        repo_path=repo_path,
         output_dir=args.output,
         last_sha=args.last_sha,
         head_sha=args.head_sha,
