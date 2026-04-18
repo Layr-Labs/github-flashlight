@@ -5,13 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "code-analysis-agent"
 version = "0.2.0"
-description = "Dependency-aware codebase analysis agent using LangGraph"
+description = "Dependency-aware codebase analysis agent using Burr"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "langgraph>=0.2.0",
-    "langchain-openai>=0.3.0",
-    "langchain-core>=0.3.0",
     "python-dotenv>=1.0.0",
     "burr[start]>=0.40.2",
 ]
