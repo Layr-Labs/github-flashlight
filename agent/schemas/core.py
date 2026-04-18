@@ -1,14 +1,11 @@
 """Data structures for discovered components.
 
-Provides a unified Component type with a pluggable ComponentKind taxonomy,
-replacing the previous binary Library/Application split. The old types are
-preserved as backward-compatible aliases.
+Provides a unified Component type with a pluggable ComponentKind taxonomy.
 """
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Dict, Any
-from pathlib import Path
+from typing import List, Dict, Any
 
 
 # ---------------------------------------------------------------------------
@@ -38,9 +35,6 @@ class ComponentKind(str, Enum):
         try:
             return cls(value.lower())
         except ValueError:
-            # Backward compat: map old "application" to SERVICE
-            if value.lower() == "application":
-                return cls.SERVICE
             return cls.UNKNOWN
 
 
@@ -203,9 +197,7 @@ class ExternalDependency:
 class Component:
     """A single component in a codebase.
 
-    Replaces the old Library/Application split with a unified type and a
-    ComponentKind enum for classification. All discovery, graph building,
-    and analysis operate on Components.
+    All discovery, graph building, and analysis operate on Components.
     """
 
     name: str
@@ -220,17 +212,12 @@ class Component:
     metadata: Dict[str, Any] = field(default_factory=dict)
     citations: List[CodeCitation] = field(default_factory=list)
 
-    # Backward-compat fields (populated from old Library/Application data)
-    libraries_used: List[str] = field(default_factory=list)
-    internal_applications: List[str] = field(default_factory=list)
-
     def to_dict(self) -> dict:
-        """Serialize to dictionary. Output is backward-compatible with old format."""
+        """Serialize to dictionary."""
         d: dict = {
             "name": self.name,
             "kind": self.kind.value,
             "type": self.type,
-            "classification": self._legacy_classification(),
             "root_path": self.root_path,
             "description": self.description,
             "internal_dependencies": self.internal_dependencies,
@@ -246,27 +233,13 @@ class Component:
             d["metadata"] = self.metadata
         if self.citations:
             d["citations"] = [c.to_dict() for c in self.citations]
-        # Legacy fields for backward compat
-        if self.libraries_used:
-            d["libraries_used"] = self.libraries_used
-        if self.internal_applications:
-            d["internal_applications"] = self.internal_applications
         return d
-
-    def _legacy_classification(self) -> str:
-        """Map ComponentKind to old 'library'/'application' for backward compat."""
-        if self.kind == ComponentKind.LIBRARY:
-            return "library"
-        return "application"
 
     @classmethod
     def from_dict(cls, data: dict) -> "Component":
-        """Deserialize from dictionary. Handles both new and old formats."""
-        # Determine kind: prefer new 'kind' field, fall back to 'classification'
+        """Deserialize from dictionary."""
         if "kind" in data:
             kind = ComponentKind.from_str(data["kind"])
-        elif "classification" in data:
-            kind = ComponentKind.from_str(data["classification"])
         else:
             kind = ComponentKind.UNKNOWN
 
@@ -285,8 +258,6 @@ class Component:
             key_files=data.get("key_files", []),
             metadata=data.get("metadata", {}),
             citations=[CodeCitation.from_dict(c) for c in data.get("citations", [])],
-            libraries_used=data.get("libraries_used", []),
-            internal_applications=data.get("internal_applications", []),
         )
 
     @property
@@ -301,161 +272,6 @@ class Component:
             ComponentKind.FRONTEND,
             ComponentKind.PIPELINE,
         )
-
-
-# ---------------------------------------------------------------------------
-# Backward compatibility: Library and Application as thin wrappers
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class BaseComponent:
-    """Base class for legacy applications and libraries."""
-
-    name: str
-    type: str
-    root_path: Path
-    manifest_path: Optional[Path] = None
-    description: str = ""
-    key_files: List[Path] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class Library(BaseComponent):
-    """Legacy type. Use Component with kind=LIBRARY instead."""
-
-    external_dependencies: List[ExternalDependency] = field(default_factory=list)
-    internal_dependencies: List[str] = field(default_factory=list)
-    citations: List[CodeCitation] = field(default_factory=list)
-
-    def to_dict(self) -> dict:
-        return {
-            "name": self.name,
-            "type": self.type,
-            "classification": "library",
-            "kind": "library",
-            "root_path": str(self.root_path),
-            "manifest_path": str(self.manifest_path) if self.manifest_path else None,
-            "description": self.description,
-            "external_dependencies": [
-                d.to_dict() if isinstance(d, ExternalDependency) else d
-                for d in self.external_dependencies
-            ],
-            "internal_dependencies": self.internal_dependencies,
-            "key_files": [str(f) for f in self.key_files],
-            "metadata": self.metadata,
-            "citations": [c.to_dict() for c in self.citations],
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "Library":
-        return cls(
-            name=data["name"],
-            type=data["type"],
-            root_path=Path(data["root_path"]),
-            manifest_path=Path(data["manifest_path"])
-            if data.get("manifest_path")
-            else None,
-            description=data.get("description", ""),
-            external_dependencies=[
-                ExternalDependency.from_dict(d)
-                for d in data.get("external_dependencies", [])
-            ],
-            internal_dependencies=data.get("internal_dependencies", []),
-            key_files=[Path(f) for f in data.get("key_files", [])],
-            metadata=data.get("metadata", {}),
-            citations=[CodeCitation.from_dict(c) for c in data.get("citations", [])],
-        )
-
-    def to_component(self) -> Component:
-        """Convert to unified Component."""
-        return Component(
-            name=self.name,
-            kind=ComponentKind.LIBRARY,
-            type=self.type,
-            root_path=str(self.root_path),
-            manifest_path=str(self.manifest_path) if self.manifest_path else "",
-            description=self.description,
-            internal_dependencies=self.internal_dependencies,
-            external_dependencies=self.external_dependencies,
-            key_files=[str(f) for f in self.key_files],
-            metadata=self.metadata,
-            citations=self.citations,
-        )
-
-
-@dataclass
-class Application(BaseComponent):
-    """Legacy type. Use Component with kind=SERVICE/CLI/FRONTEND instead."""
-
-    external_dependencies: List[ExternalDependency] = field(default_factory=list)
-    libraries_used: List[str] = field(default_factory=list)
-    internal_applications: List[str] = field(default_factory=list)
-    citations: List[CodeCitation] = field(default_factory=list)
-
-    def to_dict(self) -> dict:
-        return {
-            "name": self.name,
-            "type": self.type,
-            "classification": "application",
-            "kind": "service",
-            "root_path": str(self.root_path),
-            "manifest_path": str(self.manifest_path) if self.manifest_path else None,
-            "description": self.description,
-            "external_dependencies": [
-                d.to_dict() if isinstance(d, ExternalDependency) else d
-                for d in self.external_dependencies
-            ],
-            "libraries_used": self.libraries_used,
-            "internal_applications": self.internal_applications,
-            "key_files": [str(f) for f in self.key_files],
-            "metadata": self.metadata,
-            "citations": [c.to_dict() for c in self.citations],
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "Application":
-        return cls(
-            name=data["name"],
-            type=data["type"],
-            root_path=Path(data["root_path"]),
-            manifest_path=Path(data["manifest_path"])
-            if data.get("manifest_path")
-            else None,
-            description=data.get("description", ""),
-            external_dependencies=[
-                ExternalDependency.from_dict(d)
-                for d in data.get("external_dependencies", [])
-            ],
-            libraries_used=data.get("libraries_used", []),
-            internal_applications=data.get("internal_applications", []),
-            key_files=[Path(f) for f in data.get("key_files", [])],
-            metadata=data.get("metadata", {}),
-            citations=[CodeCitation.from_dict(c) for c in data.get("citations", [])],
-        )
-
-    def to_component(self) -> Component:
-        """Convert to unified Component."""
-        return Component(
-            name=self.name,
-            kind=ComponentKind.SERVICE,
-            type=self.type,
-            root_path=str(self.root_path),
-            manifest_path=str(self.manifest_path) if self.manifest_path else "",
-            description=self.description,
-            internal_dependencies=[],
-            external_dependencies=self.external_dependencies,
-            key_files=[str(f) for f in self.key_files],
-            metadata=self.metadata,
-            citations=self.citations,
-            libraries_used=self.libraries_used,
-            internal_applications=self.internal_applications,
-        )
-
-
-# Backward compatibility alias
-KnowledgeBasis = Application | Library
 
 
 def component_from_dict(data: dict) -> Component:

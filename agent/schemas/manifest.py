@@ -41,7 +41,9 @@ class ArtifactFile:
         )
 
     @classmethod
-    def from_path(cls, file_path: Path, root_dir: Path, category: str = "") -> "ArtifactFile":
+    def from_path(
+        cls, file_path: Path, root_dir: Path, category: str = ""
+    ) -> "ArtifactFile":
         """Create an ArtifactFile by reading from disk.
 
         Args:
@@ -86,8 +88,7 @@ class ArtifactManifest:
     source_commit: str = ""  # Git commit hash of the analyzed source (if available)
 
     # Content summary
-    libraries_count: int = 0  # Number of libraries analyzed
-    applications_count: int = 0  # Number of applications analyzed
+    components_count: int = 0  # Number of components analyzed
     total_files: int = 0  # Total artifact files in this version
 
     # File inventory
@@ -106,8 +107,7 @@ class ArtifactManifest:
             "schema_version": self.schema_version,
             "source_repo": self.source_repo,
             "source_commit": self.source_commit,
-            "libraries_count": self.libraries_count,
-            "applications_count": self.applications_count,
+            "components_count": self.components_count,
             "total_files": self.total_files,
             "files": [f.to_dict() for f in self.files],
             "metadata": self.metadata,
@@ -127,8 +127,7 @@ class ArtifactManifest:
             schema_version=data.get("schema_version", MANIFEST_SCHEMA_VERSION),
             source_repo=data.get("source_repo", ""),
             source_commit=data.get("source_commit", ""),
-            libraries_count=data.get("libraries_count", 0),
-            applications_count=data.get("applications_count", 0),
+            components_count=data.get("components_count", 0),
             total_files=data.get("total_files", 0),
             files=[ArtifactFile.from_dict(f) for f in data.get("files", [])],
             metadata=data.get("metadata", {}),

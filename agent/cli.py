@@ -49,36 +49,19 @@ def load_manifest(artifacts_dir: Path) -> dict | None:
 
 
 def load_components(artifacts_dir: Path) -> list[dict]:
-    """Load components from service_discovery in an existing artifacts directory.
-
-    Merges both 'libraries' and 'applications' arrays from components.json,
-    falling back to separate libraries.json / applications.json files.
-    """
-    components = []
-
-    # Try components.json first (combined format)
+    """Load components from service_discovery in an existing artifacts directory."""
     combined = artifacts_dir / "service_discovery" / "components.json"
-    if combined.exists():
-        with open(combined) as f:
-            data = json.load(f)
-        components.extend(data.get("libraries", []))
-        components.extend(data.get("applications", []))
-        return components
+    if not combined.exists():
+        return []
 
-    # Fall back to separate files
-    for filename in ("libraries.json", "applications.json"):
-        path = artifacts_dir / "service_discovery" / filename
-        if path.exists():
-            with open(path) as f:
-                data = json.load(f)
-            # Handle both array and object-with-key formats
-            if isinstance(data, list):
-                components.extend(data)
-            elif isinstance(data, dict):
-                for key in ("libraries", "applications"):
-                    components.extend(data.get(key, []))
+    with open(combined) as f:
+        data = json.load(f)
 
-    return components
+    if isinstance(data, dict):
+        return data.get("components", [])
+    if isinstance(data, list):
+        return data
+    return []
 
 
 def git_diff_files(repo_path: Path, last_sha: str, head_sha: str) -> list[str]:

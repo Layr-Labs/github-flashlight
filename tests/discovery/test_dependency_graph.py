@@ -134,25 +134,6 @@ class TestCycleHandling:
         assert set(levels[1]) == {"c", "d"}
 
 
-class TestLegacyInterface:
-    def test_get_analysis_order(self):
-        g = DependencyGraph()
-        for n in ["a", "b", "c"]:
-            g.add_node(n)
-        g.add_edge("b", "a")
-        g.add_edge("c", "b")
-
-        phase1, phase2 = g.get_analysis_order()
-        assert phase1 == ["a"]
-        assert phase2 == ["b", "c"]
-
-    def test_get_analysis_order_empty(self):
-        g = DependencyGraph()
-        phase1, phase2 = g.get_analysis_order()
-        assert phase1 == []
-        assert phase2 == []
-
-
 class TestGraphOperations:
     def test_get_direct_dependencies(self):
         g = DependencyGraph()
