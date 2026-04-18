@@ -1,308 +1,265 @@
 # GitHub Flashlight
 
-A sophisticated multi-agent processing pipeline using the Claude Agent SDK that performs dependency-aware codebase analysis and visualization through multi-agent composition.
+GitHub Flashlight is a repository analysis pipeline that combines deterministic component discovery with a Burr-orchestrated multi-agent workflow. It scans a local repo or GitHub URL, classifies components across multiple languages, builds a unified dependency graph, analyzes components depth-by-depth through OpenRouter-backed models, and emits structured artifacts for documentation, RAG ingestion, and architecture visualization.
 
-## Features
+## Highlights
 
-- **Automatic Service Discovery**: Identifies services in Rust (Cargo.toml), Go (go.mod), Node.js (package.json), and Python (pyproject.toml) codebases
-- **Dependency Graph Analysis**: Builds and visualizes service dependency relationships
-- **Two-Phase Analysis**:
-  - Phase 1: Analyzes foundation services with no dependencies
-  - Phase 2: Analyzes remaining services in dependency order with upstream context
-- **Context-Aware**: Code analyzers receive analyses of direct dependencies to understand integration patterns
-- **Comprehensive Documentation**: Generates system-wide architecture documentation with patterns, flows, and recommendations
-- **Multi-Agent Orchestration**: Uses specialized agents for discovery, analysis, and documentation synthesis
+- **Deterministic discovery first**: manifest parsing and component classification happen before any LLM call
+- **Flat component inventory**: all discovered components live in one `components.json` file instead of separate libraries/applications splits
+- **Eight component kinds**: `library`, `service`, `cli`, `contract`, `infra`, `pipeline`, `frontend`, `unknown`
+- **Unified knowledge graph**: `graph.json` is the source of truth for dependencies and analysis order
+- **Depth-ordered parallel analysis**: Burr runs component analyzers level-by-level so direct dependencies are available as context
+- **Incremental mode**: existing artifacts plus git SHAs let Flashlight re-analyze only changed components
+- **Citation extraction**: Markdown analyses are post-processed into per-component and aggregated citation indexes
+- **Built-in observability**: Burr tracking UI, session transcripts, and optional live monitoring scripts
 
-## Component Classification
+## Requirements
 
-GitHub Flashlight uses a deterministic discovery engine (zero LLM calls) to classify every component into one of eight `ComponentKind` values via language-specific plugins:
-
-| Kind | Description |
-|------|-------------|
-| **Library** | Reusable code with no entrypoint |
-| **Service** | Long-running process (HTTP, gRPC, daemon) |
-| **CLI** | Command-line tool |
-| **Contract** | Smart contract, API definition, or schema |
-| **Infra** | Infrastructure-as-code or deployment config (Terraform, Helm, K8s) |
-| **Pipeline** | Data pipeline or workflow definition (Airflow, dbt) |
-| **Frontend** | UI application (React, Vue, Streamlit, SwiftUI) |
-| **Unknown** | Could not classify deterministically |
-
-### Supported Languages
-
-#### Go (`go.mod`)
-- **Service**: `main.go` or `package main` with server indicators (`listenandserve`, `grpc.newserver`, `net.listen`, etc.) or service-like names (`server`, `daemon`, `proxy`, `worker`)
-- **CLI**: `main.go` with CLI indicators (`cobra.command`, `pflag`, `os.args`) or CLI-like names (`cli`, `tool`)
-- **Library**: No `main.go`, no `package main`, or has a `cmd/` directory (executables inside `cmd/` become their own components)
-- Supports single-module monorepos with per-package discovery and Go import tracing
-
-#### Rust (`Cargo.toml`)
-- **Service**: `[[bin]]` or `src/main.rs` with server framework deps (`actix-web`, `axum`, `warp`, `rocket`, `tonic`, `hyper`) or service-like names
-- **CLI**: Executable with CLI framework deps (`clap`, `structopt`, `argh`) or CLI-like names
-- **Library**: `[lib]` section only, or hybrid crates with both `lib.rs` and `main.rs`
-- Supports Cargo workspaces with glob member patterns
-
-#### Python (`pyproject.toml`)
-- **Pipeline**: Markers for `airflow`, `dagster`, `prefect`, `dbt`, `luigi`
-- **Frontend**: Markers for `streamlit`, `gradio`, `panel`, `dash`
-- **Service**: Web framework deps (`fastapi`, `flask`, `django`, `starlette`, etc.) with `[project.scripts]` or `__main__.py`
-- **CLI**: Has `[project.scripts]` or `__main__.py` without web framework deps
-- **Library**: No entry points or framework markers
-- Supports both PEP 621 and Poetry dependency formats
-
-#### TypeScript / JavaScript (`package.json`)
-- **CLI**: `"bin"` field present
-- **Frontend**: Frontend framework deps (`react`, `vue`, `svelte`, `angular`, `next`, `nuxt`, `remix`, `solid-js`, etc.)
-- **Service**: Server framework deps (`express`, `fastify`, `koa`, `nestjs`, `hono`) with a `"start"` script or `"main"` field
-- **Library**: No binary, framework, or server indicators
-- Supports npm/yarn/pnpm workspaces with recursive member discovery
-
-#### Solidity (`foundry.toml`, `hardhat.config.ts`/`.js`)
-- **Contract**: Contains `contract`, `abstract contract`, or `interface` declarations
-- **Library**: All declarations are Solidity `library` keyword
-- Supports both Foundry and Hardhat projects with import remapping and multi-package discovery
-
-#### Swift (`Package.swift`)
-- **Service**: `.executableTarget` with server framework indicators (`Vapor`, `Hummingbird`, `SwiftNIO`, `GRPC`) or service-like names
-- **Frontend**: Executable with iOS/macOS indicators (`UIApplication`, `SwiftUI`, `WindowGroup`)
-- **CLI**: `.executableTarget` with argument parsing (`ParsableCommand`, `ArgumentParser`) or CLI-like names; default for unclassified executables
-- **Library**: `.target` without `main.swift` or `@main`, `.binaryTarget`, `.systemLibrary`
-- Supports SPM multi-target packages with per-target discovery
-
-### Detection Pipeline
-1. **Manifest discovery**: Scans for language-specific manifest files (`Cargo.toml`, `go.mod`, `package.json`, `pyproject.toml`, `foundry.toml`, `Package.swift`)
-2. **Manifest analysis**: Checks for binary/entrypoint indicators in manifest structure
-3. **File structure**: Looks for `main.rs`, `main.go`, `__main__.py`, `main.swift`, `@main` attribute
-4. **Dependency scanning**: Identifies framework-specific dependencies (e.g., `axum` -> Service, `clap` -> CLI, `react` -> Frontend)
-5. **Content scanning**: Reads source files for server/CLI/UI indicators (Go reads all `.go` files; Swift reads up to 10 `.swift` files)
-6. **Name-based heuristics**: Keywords like "server", "api", "daemon" -> Service; "cli", "tool" -> CLI
-7. **Default**: Falls back to Library (or Service/CLI for executables, depending on the language)
-
-## Architecture
-
-The pipeline uses four specialized roles:
-
-1. **Primary Leader** (orchestrator)
-   - Discovers services by scanning for manifest files
-   - Builds dependency graph and determines analysis order
-   - Spawns code analyzer agents with appropriate context
-   - Spawns external service analyzers for runtime integrations
-   - Spawns architecture documenter for final synthesis
-
-2. **Code Analyzer** (multiple instances)
-   - Deep analysis of individual services
-   - Examines architecture, components, data flows, dependencies, API surface
-   - Documents all third-party dependencies with version, category, and purpose
-   - Receives context from direct dependencies
-   - Outputs Markdown reports
-
-3. **External Service Analyzer** (per-service instances)
-   - Deep-dives into how external services (databases, cloud platforms, APIs) are integrated
-   - Documents client libraries, authentication, API surface, and configuration
-   - Produces integration analysis files for architecture synthesis
-
-4. **Architecture Documenter** (single instance)
-   - Synthesizes all service analyses
-   - Aggregates external dependencies into a complete technology inventory
-   - Identifies system-wide patterns
-   - Creates comprehensive architecture documentation
+- Python 3.10+
+- `git` available on your machine
+- An OpenRouter API key
+- Access to the repository you want to analyze
 
 ## Installation
 
 ```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Create a virtual environment
+python -m venv .venv
+source .venv/bin/activate
 
-# Install dependencies
+# Install the package
 pip install -e .
 
-# Set up API key
+# Configure environment
 cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
 ```
 
-## Usage
+Set at least:
 
 ```bash
-# Run the pipeline
-python -m github_flashlight.agent
-
-# Or use the installed command
-github-flashlight
+OPENROUTER_API_KEY=your_key_here
+OPENROUTER_MODEL=anthropic/claude-sonnet-4
 ```
 
-Then provide a path to analyze:
-```
-You: Analyze the codebase at /path/to/repo
-```
+`OPENROUTER_MODEL` is optional; the default is `anthropic/claude-sonnet-4`.
 
-### Verbose Logging
+## Quick Start
 
-Enable detailed SDK and API interaction logging:
+Run a full analysis of a local repository:
 
 ```bash
-# Verbose mode - Shows API calls, agent spawning, and tool usage
-AGENT_VERBOSE=true python -m github_flashlight.agent
-
-# Debug mode - Full trace logging including API request/response details
-AGENT_DEBUG=true python -m github_flashlight.agent
+flashlight --repo /path/to/repo --output ./artifacts/my-repo
 ```
 
-When enabled, you'll see real-time information about:
-- 📤 API requests to Claude
-- 📥 API responses
-- 🚀 Subagent spawning and lifecycle
-- 🔧 Tool calls with parameters
-- ✅ Tool results and success/failure status
-- 📝 Agent context and model information
+Analyze a GitHub repository URL directly:
 
-This is useful for:
-- Understanding what the agents are doing in real-time
-- Debugging analysis pipeline issues
-- Monitoring API usage and performance
-- Learning how the multi-agent system orchestrates tasks
+```bash
+flashlight --repo https://github.com/org/repo --output ./artifacts/repo
+```
 
-### Live Observability Monitor
+When you pass a URL, Flashlight clones or updates the repo under `/tmp/flashlight-repos/<repo>` before analysis.
 
-For real-time visual monitoring of agent execution with interactive profiling:
+Equivalent module invocation:
+
+```bash
+python -m agent.cli --repo /path/to/repo --output ./artifacts/my-repo
+```
+
+## Incremental Analysis
+
+If `manifest.json` already exists in the output directory, Flashlight can reuse its `source_commit` as the previous baseline and only re-analyze changed components.
+
+Auto-detect the previous SHA from the existing manifest:
+
+```bash
+flashlight \
+  --repo /path/to/repo \
+  --output ./artifacts/my-repo \
+  --head-sha "$(git -C /path/to/repo rev-parse HEAD)"
+```
+
+Or provide both SHAs explicitly:
+
+```bash
+flashlight \
+  --repo /path/to/repo \
+  --output ./artifacts/my-repo \
+  --last-sha <previous_commit> \
+  --head-sha <current_commit>
+```
+
+Incremental mode uses git diff output plus the prior `service_discovery/components.json` to map changed files back to owning components.
+
+## Observability
+
+### Burr Tracking UI
+
+The active runtime is Burr. Start the Burr tracking server with:
+
+```bash
+.burr-ui-venv/bin/python -m uvicorn burr.tracking.server.run:app --port 7241
+```
+
+During analysis, Flashlight prints the tracking URL:
+
+```text
+http://localhost:7241
+```
+
+### Verbose and Debug Logging
+
+```bash
+flashlight --repo /path/to/repo --output ./artifacts/my-repo --verbose
+flashlight --repo /path/to/repo --output ./artifacts/my-repo --debug
+```
+
+These modes surface OpenRouter calls, tool usage, subagent lifecycle, and more detailed pipeline logging.
+
+### Live Session Monitor
 
 ```bash
 ./observability/live_monitor.sh
 ```
 
-This launches a web-based profiler that automatically tracks your current session, displaying tool calls, timing metrics, and agent interactions in real-time. The visualization updates live as your agents work, providing an interactive dashboard for monitoring pipeline execution and performance analysis.
+This launches the local observability dashboard in `observability/` for real-time session monitoring.
 
-The pipeline will:
-1. Scan for services (Cargo.toml, go.mod, package.json, pyproject.toml files)
-2. Build dependency graph
-3. Analyze services in two phases:
-   - Phase 1: Services with no dependencies (parallel)
-   - Phase 2: Services with dependencies (in order, with context)
-4. Generate architecture documentation
+## Artifact Layout
 
-## Output Structure
+Artifacts are generated under `/tmp/<repo-name>/` during execution and copied into your `--output` directory at the end of the run.
 
-```
-files/
+```text
+artifacts/<repo>/
+├── manifest.json
 ├── service_discovery/
-│   ├── services.json              # Discovered services metadata
-│   └── discovery_log.md           # Human-readable discovery log
+│   └── components.json
 ├── dependency_graphs/
-│   ├── dependency_graph.json      # Machine-readable graph
-│   └── dependency_graph.md        # Visualization
+│   ├── graph.json
+│   └── analysis_order.json
 ├── service_analyses/
-│   ├── {service1}.json            # Structured analysis
-│   ├── {service1}.md              # Human-readable report
-│   └── ... (one pair per service)
+│   ├── <component>.md
+│   ├── <component>.citations.json
+│   └── all_citations.json
 └── architecture_docs/
-    ├── architecture.md            # Comprehensive documentation
-    └── quick_reference.md         # One-page summary
+    ├── architecture.md
+    └── quick_reference.md
 
 logs/
 └── session_YYYYMMDD_HHMMSS/
-    ├── transcript.txt             # Conversation log
-    └── tool_calls.jsonl           # Structured tool usage
+    ├── transcript.txt
+    └── tool_calls.jsonl
 ```
 
-## Example Analysis Flow
+Notes:
 
-For a Rust codebase with this structure:
+- `components.json` is a flat inventory of every discovered component plus metadata counts.
+- `graph.json` is the unified knowledge graph that replaces the old fragmented graph outputs.
+- `analysis_order.json` contains depth buckets used by the orchestrator.
+- `manifest.json` is used for provenance and incremental re-analysis.
+- Citation files are derived from the Markdown reports after the analysis phase completes.
+
+## Pipeline Architecture
+
+Flashlight runs in six stages:
+
+1. **Deterministic discovery**
+   - Scans manifests such as `Cargo.toml`, `go.mod`, `package.json`, `pyproject.toml`, `foundry.toml`, and `Package.swift`
+   - Produces `service_discovery/components.json` with zero LLM calls
+
+2. **Knowledge graph construction**
+   - Builds a unified graph for all component kinds
+   - Computes depth-ordered analysis buckets and writes `analysis_order.json`
+
+3. **Lead orchestration with Burr**
+   - The main state machine is `receive_input -> read_discovery -> analyze_current_depth (loop) -> synthesize -> respond`
+   - Each depth level is analyzed in parallel where possible
+
+4. **Component analysis**
+   - Component analyzers inspect architecture, APIs, data flows, dependencies, and external integrations
+   - Direct dependency analyses are passed forward as context
+
+5. **Architecture synthesis**
+   - An architecture documenter synthesizes cross-component patterns, system flows, and technology inventory
+   - Produces `architecture.md` and `quick_reference.md`
+
+6. **Citation extraction and packaging**
+   - Extracts structured citations from component analyses
+   - Writes per-component citation files and `all_citations.json`
+   - Copies final artifacts into the requested output directory
+
+## Component Kinds
+
+GitHub Flashlight classifies every discovered component into one of eight `ComponentKind` values:
+
+| Kind | Description |
+|------|-------------|
+| **Library** | Reusable code with no entrypoint |
+| **Service** | Long-running process such as an API server, daemon, or worker |
+| **CLI** | Command-line tool |
+| **Contract** | Smart contract, API definition, or schema |
+| **Infra** | Infrastructure-as-code or deployment config |
+| **Pipeline** | Workflow or data-pipeline definition |
+| **Frontend** | UI application such as React, Next.js, Streamlit, Gradio, or SwiftUI |
+| **Unknown** | Could not be classified deterministically |
+
+## Supported Ecosystems
+
+Discovery is currently implemented for:
+
+- **Go** via `go.mod`
+- **Rust** via `Cargo.toml`
+- **Python** via `pyproject.toml`
+- **TypeScript / JavaScript** via `package.json`
+- **Solidity** via `foundry.toml` and Hardhat config files
+- **Swift** via `Package.swift`
+
+Each language plugin applies language-specific entrypoint, dependency, naming, and file-structure heuristics to classify components and resolve internal dependencies.
+
+## Detection Pipeline
+
+Classification follows this deterministic sequence:
+
+1. Manifest discovery
+2. Manifest analysis
+3. File-structure checks for entrypoints
+4. Dependency scanning for framework signals
+5. Targeted source scanning for runtime indicators
+6. Name-based heuristics
+7. Safe fallback classification
+
+This keeps repo inventory fast, reproducible, and cheap before the LLM-driven phases begin.
+
+## Design Principles
+
+- **Discovery before analysis**: the LLM never invents the repo inventory
+- **Direct-dependency context only**: analyzers receive upstream context from direct dependencies, not the full transitive graph
+- **Depth-ordered parallelism**: maximize parallel work without violating dependency ordering
+- **Structured artifacts first**: machine-readable outputs are first-class, with Markdown as a derived human-facing view
+- **Provenance matters**: manifests, source commits, and code citations are preserved for downstream indexing and review
+
+## Utilities
+
+Two helper scripts are available for deterministic graph building from an existing discovery output:
+
+```bash
+python scripts/build_dependency_graph.py /tmp/my-repo/service_discovery /tmp/my-repo/dependency_graphs
+python scripts/build_knowledge_graph.py /tmp/my-repo/service_discovery /tmp/my-repo/dependency_graphs
 ```
-repo/
-├── common-utils/          (no dependencies)
-├── config-loader/         (no dependencies)
-├── database-layer/        (depends on common-utils)
-├── auth-service/          (depends on database-layer)
-└── api-gateway/           (depends on auth-service, database-layer)
-```
 
-The agent will:
-1. **Phase 1**: Analyze `common-utils` and `config-loader` in parallel
-2. **Phase 2**:
-   - Analyze `database-layer` with context from `common-utils`
-   - Analyze `auth-service` with context from `database-layer` only (not common-utils)
-   - Analyze `api-gateway` with context from `auth-service` and `database-layer`
-3. **Synthesis**: Generate comprehensive architecture documentation
+`build_knowledge_graph.py` writes the current unified `graph.json` format and `analysis_order.json`.
 
-## Key Design Principles
+## Legacy Note
 
-- **Direct Dependencies Only**: Analyzers receive context only from direct dependencies, not transitive ones
-- **Dependency Order**: Services are analyzed in topological order to ensure dependencies are analyzed first
-- **Parallel Execution**: Services at the same dependency level are analyzed in parallel
-- **Structured Output**: Both machine-readable (JSON) and human-readable (Markdown) outputs
-
-## Supported Languages
-
-- **Rust**: Full support (Cargo.toml discovery, dependency extraction)
-- **Go**: Full support (go.mod discovery, dependency extraction)
-- **Node.js**: Partial support (package.json discovery)
-- **Python**: Partial support (pyproject.toml discovery)
-
-## Requirements
-
-- Python 3.10+
-- Claude API key
-- Access to the codebase to analyze
+The active production path is the Burr-based pipeline in `agent/burr_app.py`. The `*_langgraph_legacy.py` files remain in the repository as migration-era references and are not the primary execution path.
 
 ## Development
 
 ```bash
-# Install with dev dependencies
+# Install dev dependencies
 pip install -e ".[dev]"
 
-# Run tests (when available)
+# Run tests
 pytest
 ```
-
-## How It Works
-
-The primary leader orchestrates a sophisticated multi-phase workflow:
-
-### Discovery Phase
-- Uses Glob to find manifest files (Cargo.toml, go.mod, package.json, pyproject.toml)
-- Reads each manifest to extract service metadata
-- Identifies internal dependencies (path-based in manifests)
-- Saves service inventory to JSON
-
-### Graph Building Phase
-- Constructs directed dependency graph
-- Calculates analysis order using two-phase approach:
-  - Phase 1: Services with in-degree 0 (no dependencies)
-  - Phase 2: Topological sort of remaining services
-- Visualizes graph in both JSON and Markdown
-
-### Analysis Phase
-- **Phase 1**: Spawns code-analyzer for each no-dependency service (parallel)
-- **Phase 2**: For each remaining service:
-  - Waits for its direct dependencies to complete
-  - Loads direct dependency analyses
-  - Builds context summary (architecture, APIs, components)
-  - Spawns code-analyzer with context
-  - Ensures proper ordering while maximizing parallelism
-
-### Synthesis Phase
-- Spawns architecture-documenter after all analyses complete
-- Reads all service analyses and dependency graph
-- Identifies system-wide patterns and architectural approaches
-- Generates comprehensive documentation with:
-  - System overview
-  - Service catalog
-  - Dependency visualization
-  - Architectural patterns
-  - Technology stack
-  - Major data flows
-  - Development guide
-  - Recommendations
-
-## Contributing
-
-This project showcases the Claude Agent SDK's multi-agent composition capabilities. Feel free to extend it with:
-- Additional language support (Java, C#, etc.)
-- Enhanced metrics collection (LOC, complexity, test coverage)
-- Incremental analysis for large repositories
-- Custom analysis plugins
-- Additional visualization options
 
 ## License
 
