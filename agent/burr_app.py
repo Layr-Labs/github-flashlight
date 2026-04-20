@@ -45,18 +45,35 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration
+#
+# Flashlight speaks the OpenAI Chat Completions protocol, so it works with
+# any OpenAI-compatible endpoint (OpenAI, OpenRouter, vLLM, LM Studio, Ollama,
+# Together, Groq, etc.).
+#
+# Required:
+#     OPENAI_API_KEY   - bearer token for the target endpoint
+#
+# Optional:
+#     OPENAI_BASE_URL  - defaults to https://api.openai.com/v1
+#     OPENAI_MODEL     - defaults to gpt-4o-mini
 # ---------------------------------------------------------------------------
 
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_MODEL = os.environ.get("OPENROUTER_MODEL", "anthropic/claude-sonnet-4")
+DEFAULT_BASE_URL = "https://api.openai.com/v1"
+DEFAULT_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+
+
+def get_base_url() -> str:
+    """Return the OpenAI-compatible API base URL."""
+    return os.environ.get("OPENAI_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
 
 
 def get_api_key() -> str:
-    """Get OpenRouter API key from environment."""
-    key = os.environ.get("OPENROUTER_API_KEY", "")
+    """Return the OpenAI-compatible API key."""
+    key = os.environ.get("OPENAI_API_KEY", "")
     if not key:
         raise RuntimeError(
-            "OPENROUTER_API_KEY not set. Get one at https://openrouter.ai/keys"
+            "OPENAI_API_KEY not set. Point OPENAI_BASE_URL at your provider "
+            "(OpenAI, OpenRouter, vLLM, LM Studio, ...) and set OPENAI_API_KEY."
         )
     return key
 
@@ -503,7 +520,7 @@ def _build_subagent_app(
 
         api_messages = [{"role": "system", "content": sys_prompt}] + messages
 
-        response = call_openrouter(
+        response = _chat_completion(
             messages=api_messages,
             tools=subagent_tools,
         )
@@ -687,7 +704,7 @@ def _run_subagent_loop(
         )
 
         try:
-            response = call_openrouter(
+            response = _chat_completion(
                 messages=api_messages,
                 tools=subagent_tools,
             )
@@ -773,11 +790,11 @@ TOOL_FUNCTIONS = {
 
 
 # ---------------------------------------------------------------------------
-# OpenRouter LLM client
+# OpenAI-compatible LLM client
 # ---------------------------------------------------------------------------
 
 
-def call_openrouter(
+def _chat_completion(
     messages: List[Dict[str, Any]],
     model: str = DEFAULT_MODEL,
     tools: Optional[List[Dict]] = None,
@@ -786,7 +803,11 @@ def call_openrouter(
     max_retries: int = 3,
     initial_retry_delay: float = 2.0,
 ) -> Dict[str, Any]:
-    """Call OpenRouter API and return the response with retry logic.
+    """Call an OpenAI-compatible Chat Completions endpoint with retry logic.
+
+    Works with any OpenAI-compatible API (OpenAI, OpenRouter, vLLM, LM Studio,
+    Ollama, Together, Groq, ...). Base URL is resolved from OPENAI_BASE_URL
+    and defaults to https://api.openai.com/v1.
 
     Implements exponential backoff for transient failures:
     - Timeouts (httpx.TimeoutException)
@@ -814,6 +835,7 @@ def call_openrouter(
         RuntimeError: On exhausted retries
     """
     api_key = get_api_key()
+    base_url = get_base_url()
 
     payload = {
         "model": model,
@@ -826,9 +848,12 @@ def call_openrouter(
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/anthropics/flashlight",
-        "X-Title": "flashlight",
     }
+    # OpenRouter-specific attribution headers (harmless but only meaningful
+    # when actually routing through openrouter.ai).
+    if "openrouter.ai" in base_url:
+        headers["HTTP-Referer"] = "https://github.com/anthropics/flashlight"
+        headers["X-Title"] = "flashlight"
 
     last_exception: Optional[Exception] = None
     retry_delay = initial_retry_delay
@@ -837,7 +862,7 @@ def call_openrouter(
         try:
             with httpx.Client(timeout=timeout) as client:
                 response = client.post(
-                    f"{OPENROUTER_BASE_URL}/chat/completions",
+                    f"{base_url}/chat/completions",
                     json=payload,
                     headers=headers,
                 )
@@ -892,7 +917,7 @@ def call_openrouter(
                     "timeout" if is_timeout else f"HTTP {e.response.status_code}"
                 )
                 logger.warning(
-                    f"OpenRouter request failed ({error_type}), "
+                    f"LLM request failed ({error_type}), "
                     f"retrying in {retry_delay:.1f}s (attempt {attempt + 1}/{max_retries + 1})"
                 )
                 time.sleep(retry_delay)
@@ -906,7 +931,7 @@ def call_openrouter(
             last_exception = e
             if attempt < max_retries:
                 logger.warning(
-                    f"OpenRouter request failed (network error: {e}), "
+                    f"LLM request failed (network error: {e}), "
                     f"retrying in {retry_delay:.1f}s (attempt {attempt + 1}/{max_retries + 1})"
                 )
                 time.sleep(retry_delay)
@@ -917,7 +942,7 @@ def call_openrouter(
 
     # Should not reach here, but just in case
     raise RuntimeError(
-        f"OpenRouter request failed after {max_retries + 1} attempts: {last_exception}"
+        f"LLM request failed after {max_retries + 1} attempts: {last_exception}"
     )
 
 
@@ -940,8 +965,9 @@ def call_openrouter(
 def call_llm(state: State, __tracer: "TracerFactory") -> State:
     """Call the LLM with the current conversation history.
 
-    This is the core LLM action - it sends messages to OpenRouter and
-    processes the response, extracting any tool calls.
+    This is the core LLM action - it sends messages to the configured
+    OpenAI-compatible endpoint and processes the response, extracting
+    any tool calls.
 
     Sets has_pending_tools boolean for transition conditions.
     Source: agent/burr_app.py
@@ -949,7 +975,7 @@ def call_llm(state: State, __tracer: "TracerFactory") -> State:
 
     Uses __tracer for nested span visibility into:
     - Message preparation
-    - OpenRouter API call (with token/model details)
+    - LLM API call (with token/model details)
     - Response processing
     """
     messages = state.get("messages", [])
@@ -965,12 +991,12 @@ def call_llm(state: State, __tracer: "TracerFactory") -> State:
             has_tools=True,
         )
 
-    # Span: Call the LLM via OpenRouter
-    with __tracer("openrouter_api_call", span_dependencies=["prepare_messages"]) as t:
-        model = os.environ.get("OPENROUTER_MODEL", DEFAULT_MODEL)
+    # Span: Call the LLM
+    with __tracer("llm_api_call", span_dependencies=["prepare_messages"]) as t:
+        model = os.environ.get("OPENAI_MODEL", DEFAULT_MODEL)
         t.log_attributes(model=model, tool_count=len(AVAILABLE_TOOLS))
 
-        response = call_openrouter(
+        response = _chat_completion(
             messages=api_messages,
             tools=AVAILABLE_TOOLS,
         )
@@ -986,7 +1012,7 @@ def call_llm(state: State, __tracer: "TracerFactory") -> State:
         )
 
     # Span: Process response
-    with __tracer("process_response", span_dependencies=["openrouter_api_call"]) as t:
+    with __tracer("process_response", span_dependencies=["llm_api_call"]) as t:
         content = response["content"]
         tool_calls = response["tool_calls"]
 
@@ -1483,7 +1509,7 @@ def synthesize(state: State, __tracer: "TracerFactory") -> State:
     for iteration in range(max_iterations):
         with __tracer(f"synth_iteration_{iteration}") as iter_t:
             try:
-                response = call_openrouter(
+                response = _chat_completion(
                     messages=api_messages,
                     tools=subagent_tools,
                 )

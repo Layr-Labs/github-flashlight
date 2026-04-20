@@ -259,9 +259,13 @@ def analyze(
 
     load_dotenv()
 
-    if not os.environ.get("OPENROUTER_API_KEY"):
-        print("Error: OPENROUTER_API_KEY not found.", file=sys.stderr)
-        print("Get your key at: https://openrouter.ai/keys", file=sys.stderr)
+    if not os.environ.get("OPENAI_API_KEY"):
+        print("Error: OPENAI_API_KEY not found.", file=sys.stderr)
+        print(
+            "Flashlight uses any OpenAI-compatible endpoint. Set OPENAI_API_KEY "
+            "and (optionally) OPENAI_BASE_URL + OPENAI_MODEL.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     repo = Path(repo_path).resolve()

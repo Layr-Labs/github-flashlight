@@ -1,6 +1,6 @@
 # GitHub Flashlight
 
-A sophisticated multi-agent processing pipeline using the Claude Agent SDK that performs dependency-aware codebase analysis and visualization through multi-agent composition.
+A multi-agent processing pipeline that performs dependency-aware codebase analysis and visualization. Built on [Burr](https://github.com/apache/burr) for explicit state-machine orchestration, and speaks the OpenAI Chat Completions protocol — so it works with **any OpenAI-compatible endpoint** (OpenAI, OpenRouter, vLLM, LM Studio, Ollama, Together, Groq, …).
 
 ## Features
 
@@ -117,9 +117,37 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -e .
 
-# Set up API key
+# Configure your LLM endpoint
 cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
+# Edit .env and set OPENAI_API_KEY (and optionally OPENAI_BASE_URL / OPENAI_MODEL)
+```
+
+### LLM configuration
+
+Flashlight uses the OpenAI Chat Completions API, so any OpenAI-compatible provider works. Set:
+
+| Variable | Required | Default | Notes |
+|----------|----------|---------|-------|
+| `OPENAI_API_KEY` | yes | — | Bearer token for the target endpoint |
+| `OPENAI_BASE_URL` | no | `https://api.openai.com/v1` | Point at OpenAI, OpenRouter, vLLM, LM Studio, Ollama, etc. |
+| `OPENAI_MODEL` | no | `gpt-4o-mini` | Any model served by your chosen endpoint |
+
+Example configurations:
+
+```bash
+# OpenAI
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o
+
+# OpenRouter (access to Claude, Llama, etc. via one API)
+OPENAI_API_KEY=sk-or-...
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+OPENAI_MODEL=anthropic/claude-sonnet-4
+
+# Local vLLM / LM Studio / Ollama
+OPENAI_API_KEY=not-needed-but-must-be-set
+OPENAI_BASE_URL=http://localhost:8000/v1
+OPENAI_MODEL=meta-llama/Llama-3.1-70B-Instruct
 ```
 
 ## Usage
@@ -150,12 +178,11 @@ AGENT_DEBUG=true python -m github_flashlight.agent
 ```
 
 When enabled, you'll see real-time information about:
-- 📤 API requests to Claude
-- 📥 API responses
-- 🚀 Subagent spawning and lifecycle
-- 🔧 Tool calls with parameters
-- ✅ Tool results and success/failure status
-- 📝 Agent context and model information
+- LLM API requests and responses
+- Subagent spawning and lifecycle
+- Tool calls with parameters
+- Tool results and success/failure status
+- Agent context and model information
 
 This is useful for:
 - Understanding what the agents are doing in real-time
@@ -232,7 +259,7 @@ The agent will:
 ## Requirements
 
 - Python 3.10+
-- Claude API key
+- An API key for an OpenAI-compatible endpoint (OpenAI, OpenRouter, a self-hosted vLLM/LM Studio/Ollama server, etc.)
 - Access to the codebase to analyze
 
 ## Development
@@ -287,7 +314,7 @@ The primary leader orchestrates a sophisticated multi-phase workflow:
 
 ## Contributing
 
-This project showcases the Claude Agent SDK's multi-agent composition capabilities. Feel free to extend it with:
+This project showcases dependency-aware multi-agent composition over the OpenAI Chat Completions protocol. Feel free to extend it with:
 - Additional language support (Java, C#, etc.)
 - Enhanced metrics collection (LOC, complexity, test coverage)
 - Incremental analysis for large repositories
