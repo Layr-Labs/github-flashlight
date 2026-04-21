@@ -55,10 +55,13 @@ def analyze(service_name: str):
         service_name: Name of the service (must have discovery files in /tmp/{service_name}/)
     """
     # Check API key first
-    if not os.environ.get("OPENROUTER_API_KEY"):
-        print("\nError: OPENROUTER_API_KEY not found.")
+    if not os.environ.get("OPENAI_API_KEY"):
+        print("\nError: OPENAI_API_KEY not found.")
         print("Set it in a .env file or export it in your shell.")
-        print("Get your key at: https://openrouter.ai/keys\n")
+        print(
+            "Flashlight works with any OpenAI-compatible endpoint; point "
+            "OPENAI_BASE_URL at your provider (defaults to https://api.openai.com/v1).\n"
+        )
         return
 
     # Setup session directory and transcript
