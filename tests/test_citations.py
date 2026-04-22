@@ -11,6 +11,7 @@ from agent.utils.citation_extractor import (
     validate_citation_dict,
     extract_component_citations,
     build_citations_index,
+    strip_extracted_sections,
     ExtractionResult,
 )
 
@@ -393,3 +394,325 @@ class TestBuildCitationsIndex:
         assert citation["source_url"] == (
             "https://github.com/myorg/myrepo/blob/deadbeef/src/config.rs#L1-L15"
         )
+
+
+# ---------------------------------------------------------------------------
+# component_root fallback resolution
+#
+# LLMs frequently emit citation paths that aren't repo-root-relative. The
+# validator/extractor recover these using the component's root_path as a
+# prefix candidate, with two strategies (suffix-overlap dedup, plain
+# prepend). These tests pin each recovery path.
+# ---------------------------------------------------------------------------
+
+
+class TestComponentRootFallback:
+    def _make_repo(self, tmp_path, relpath):
+        full = tmp_path / relpath
+        full.parent.mkdir(parents=True, exist_ok=True)
+        full.write_text("content\n")
+        return full
+
+    def test_repo_root_relative_path_accepted_as_is(self, tmp_path):
+        """If the LLM emits the canonical repo-root path, no rewrite happens."""
+        self._make_repo(tmp_path, "omlx/models/base.py")
+        raw = {
+            "file_path": "omlx/models/base.py",
+            "start_line": 1,
+            "end_line": 5,
+            "claim": "base model",
+        }
+        citation, errors = validate_citation_dict(
+            raw, repo_root=tmp_path, component_root="omlx/models"
+        )
+        assert errors == []
+        assert citation.file_path == "omlx/models/base.py"
+
+    def test_plain_prepend_for_bare_filename(self, tmp_path):
+        """Bare filename + component_root -> prepended full path."""
+        self._make_repo(tmp_path, "omlx/models/base.py")
+        raw = {
+            "file_path": "base.py",
+            "start_line": 1,
+            "end_line": 5,
+            "claim": "base model",
+        }
+        citation, errors = validate_citation_dict(
+            raw, repo_root=tmp_path, component_root="omlx/models"
+        )
+        assert errors == []
+        assert citation.file_path == "omlx/models/base.py"
+
+    def test_suffix_overlap_dedup(self, tmp_path):
+        """Path that repeats the component's directory name (a common LLM
+        mistake) is merged via overlap dedup, not naive concat."""
+        self._make_repo(tmp_path, "omlx/models/base.py")
+        raw = {
+            "file_path": "models/base.py",  # repeats last segment of component_root
+            "start_line": 1,
+            "end_line": 5,
+            "claim": "base model",
+        }
+        citation, errors = validate_citation_dict(
+            raw, repo_root=tmp_path, component_root="omlx/models"
+        )
+        assert errors == []
+        # NOT "omlx/models/models/base.py" — the dedup must win.
+        assert citation.file_path == "omlx/models/base.py"
+
+    def test_multi_segment_overlap(self, tmp_path):
+        """A longer overlap should dedup correctly too."""
+        self._make_repo(tmp_path, "pkg/auth/token/jwt.rs")
+        raw = {
+            "file_path": "auth/token/jwt.rs",
+            "start_line": 1,
+            "end_line": 5,
+            "claim": "jwt",
+        }
+        citation, errors = validate_citation_dict(
+            raw, repo_root=tmp_path, component_root="pkg/auth/token"
+        )
+        assert errors == []
+        assert citation.file_path == "pkg/auth/token/jwt.rs"
+
+    def test_leading_dot_slash_stripped(self, tmp_path):
+        self._make_repo(tmp_path, "omlx/models/base.py")
+        raw = {
+            "file_path": "./base.py",
+            "start_line": 1,
+            "end_line": 5,
+            "claim": "base",
+        }
+        citation, errors = validate_citation_dict(
+            raw, repo_root=tmp_path, component_root="omlx/models"
+        )
+        assert errors == []
+        assert citation.file_path == "omlx/models/base.py"
+
+    def test_absolute_project_prefix_still_stripped(self, tmp_path):
+        """The existing /tmp/*/project/ strip continues to work alongside
+        the new component-root fallback."""
+        self._make_repo(tmp_path, "omlx/models/base.py")
+        raw = {
+            "file_path": "/tmp/omlx/project/omlx/models/base.py",
+            "start_line": 1,
+            "end_line": 5,
+            "claim": "base",
+        }
+        citation, errors = validate_citation_dict(
+            raw, repo_root=tmp_path, component_root="omlx/models"
+        )
+        assert errors == []
+        assert citation.file_path == "omlx/models/base.py"
+
+    def test_unresolvable_path_still_errors(self, tmp_path):
+        """If neither the bare path nor component-rooted variants exist,
+        we keep the original error."""
+        raw = {
+            "file_path": "ghost/file.py",
+            "start_line": 1,
+            "end_line": 5,
+            "claim": "ghost",
+        }
+        citation, errors = validate_citation_dict(
+            raw, repo_root=tmp_path, component_root="omlx/models"
+        )
+        assert citation is None
+        assert any("does not exist" in e for e in errors)
+
+    def test_component_root_unused_when_no_repo_root(self):
+        """component_root only activates when repo_root is provided (i.e.
+        when we're actually doing existence checks)."""
+        raw = {
+            "file_path": "models/base.py",
+            "start_line": 1,
+            "end_line": 5,
+            "claim": "base",
+        }
+        citation, errors = validate_citation_dict(
+            raw, repo_root=None, component_root="omlx/models"
+        )
+        assert errors == []
+        # Path is passed through unchanged when we can't verify.
+        assert citation.file_path == "models/base.py"
+
+    def test_index_uses_component_roots_map(self, tmp_path):
+        """build_citations_index threads component_roots through to the
+        validator."""
+        # Layout: repo with the component's real file
+        (tmp_path / "omlx/models").mkdir(parents=True)
+        (tmp_path / "omlx/models/base.py").write_text("x\n")
+
+        # Analysis emits a component-relative path (the common failure mode)
+        analyses_dir = tmp_path / "service_analyses"
+        analyses_dir.mkdir()
+        (analyses_dir / "models.md").write_text(
+            dedent(
+                """
+                # models
+
+                ## Citations
+                ```json
+                [
+                  {
+                    "file_path": "base.py",
+                    "start_line": 1,
+                    "end_line": 5,
+                    "claim": "entry",
+                    "section": "Key Components"
+                  }
+                ]
+                ```
+                """
+            )
+        )
+
+        index = build_citations_index(
+            analyses_dir=analyses_dir,
+            repo_root=tmp_path,
+            component_roots={"models": "omlx/models"},
+        )
+        assert index["metadata"]["total_citations"] == 1
+        assert index["all_citations"][0]["file_path"] == "omlx/models/base.py"
+
+    def test_index_without_component_roots_still_works(self, tmp_path):
+        """Backwards compatibility: callers that don't pass component_roots
+        get the pre-existing behavior (path accepted as-is or rejected)."""
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src/main.rs").write_text("fn main() {}\n")
+
+        analyses_dir = tmp_path / "service_analyses"
+        analyses_dir.mkdir()
+        (analyses_dir / "lib.md").write_text(
+            dedent(
+                """
+                # lib
+
+                ## Citations
+                ```json
+                [
+                  {
+                    "file_path": "src/main.rs",
+                    "start_line": 1,
+                    "end_line": 1,
+                    "claim": "entry",
+                    "section": "Key Components"
+                  }
+                ]
+                ```
+                """
+            )
+        )
+
+        index = build_citations_index(
+            analyses_dir=analyses_dir,
+            repo_root=tmp_path,
+            # no component_roots
+        )
+        assert index["metadata"]["total_citations"] == 1
+
+
+# ---------------------------------------------------------------------------
+# strip_extracted_sections — ensures the duplicated JSON blocks are removed
+# from the human-facing Markdown after being lifted into sidecar files.
+# ---------------------------------------------------------------------------
+
+
+class TestStripExtractedSections:
+    def test_strips_citations_section(self):
+        md = SAMPLE_MD_WITH_CITATIONS
+        cleaned = strip_extracted_sections(md)
+        assert "## Citations" not in cleaned
+        assert "```json" not in cleaned
+        # Prose sections around the block are preserved.
+        assert "## Architecture" in cleaned
+        assert "## Analysis Summary" in cleaned
+
+    def test_strips_analysis_data_section(self):
+        md = dedent(
+            """\
+            # lib
+
+            ## Architecture
+            Prose.
+
+            ## Analysis Data
+            ```json
+            {"summary": "x", "tech_stack": ["python"]}
+            ```
+
+            ## Citations
+            ```json
+            [{"file_path": "a.py", "start_line": 1, "end_line": 2, "claim": "c"}]
+            ```
+            """
+        )
+        cleaned = strip_extracted_sections(md)
+        assert "## Analysis Data" not in cleaned
+        assert "## Citations" not in cleaned
+        assert "```json" not in cleaned
+        assert "## Architecture" in cleaned
+
+    def test_does_not_strip_analysis_summary(self):
+        """Regex must not match ``## Analysis Summary`` (a common human section)."""
+        md = SAMPLE_MD_WITH_CITATIONS
+        cleaned = strip_extracted_sections(md)
+        assert "## Analysis Summary" in cleaned
+
+    def test_idempotent(self):
+        md = SAMPLE_MD_WITH_CITATIONS
+        once = strip_extracted_sections(md)
+        twice = strip_extracted_sections(once)
+        assert once == twice
+
+    def test_no_change_when_no_sections(self):
+        md = SAMPLE_MD_NO_CITATIONS
+        cleaned = strip_extracted_sections(md)
+        # Content survives; we only normalise trailing whitespace.
+        assert cleaned.rstrip() == md.rstrip()
+
+    def test_trailing_newline_normalised(self):
+        cleaned = strip_extracted_sections(SAMPLE_MD_WITH_CITATIONS)
+        assert cleaned.endswith("\n")
+        assert not cleaned.endswith("\n\n\n")
+
+    def test_build_index_strips_md_after_extraction(self, tmp_path):
+        """End-to-end: running the pipeline removes the duplicated blocks
+        from the Markdown while preserving the sidecar JSON."""
+        analyses_dir = tmp_path / "service_analyses"
+        analyses_dir.mkdir()
+        md_path = analyses_dir / "my-library.md"
+        md_path.write_text(SAMPLE_MD_WITH_CITATIONS)
+
+        build_citations_index(
+            analyses_dir=analyses_dir,
+            source_repo="https://github.com/org/repo",
+            source_commit="abc",
+        )
+
+        # Sidecar was written
+        sidecar = analyses_dir / "my-library.citations.json"
+        assert sidecar.exists()
+
+        # MD no longer contains the extracted sections
+        cleaned_md = md_path.read_text()
+        assert "## Citations" not in cleaned_md
+        assert "```json" not in cleaned_md
+        # Non-extracted prose is preserved
+        assert "## Architecture" in cleaned_md
+
+    def test_build_index_leaves_md_untouched_on_extraction_failure(self, tmp_path):
+        """If extraction fails (e.g. invalid JSON), the MD must be left as-is
+        so the malformed block is still visible for debugging."""
+        analyses_dir = tmp_path / "service_analyses"
+        analyses_dir.mkdir()
+        md_path = analyses_dir / "bad.md"
+        md_path.write_text(SAMPLE_MD_INVALID_JSON)
+        original = md_path.read_text()
+
+        build_citations_index(analyses_dir=analyses_dir)
+
+        # MD unchanged
+        assert md_path.read_text() == original
+        # No sidecar written
+        assert not (analyses_dir / "bad.citations.json").exists()

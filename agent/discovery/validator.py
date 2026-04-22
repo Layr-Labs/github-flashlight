@@ -119,9 +119,14 @@ def validate_analysis(
 ) -> List[str]:
     """Validate post-analysis output.
 
+    Citations now live in sidecar ``{component}.citations.json`` files
+    produced by the citation extractor (the ``## Citations`` block is
+    stripped from the Markdown after extraction to avoid duplication).
+
     Checks:
     - Every component has a corresponding analysis .md file
-    - Analysis files contain a ## Citations section with valid JSON
+    - Every component has a corresponding .citations.json file with a
+      non-empty citations array
     - Cited files exist in the repository (spot check)
     - Cited line ranges are plausible (start <= end, within file length)
     """
@@ -134,65 +139,69 @@ def validate_analysis(
             errors.append(f"Missing analysis file for component '{comp.name}'")
             continue
 
-        # Spot-check citations
-        citation_errors = _validate_citations_in_file(
-            analysis_file, comp.name, repo_root
+        # Spot-check citations from the sidecar JSON
+        citations_file = analyses_dir / f"{comp.name}.citations.json"
+        citation_errors = _validate_citations_sidecar(
+            citations_file, comp.name, repo_root
         )
         errors.extend(citation_errors)
 
     return errors
 
 
-def _validate_citations_in_file(
-    md_path: Path,
+def _validate_citations_sidecar(
+    sidecar_path: Path,
     component_name: str,
     repo_root: Path,
     max_spot_checks: int = 5,
 ) -> List[str]:
-    """Validate citations embedded in a Markdown analysis file.
+    """Validate citations from the ``{component}.citations.json`` sidecar.
 
     Performs lightweight checks:
-    - ## Citations section exists
+    - Sidecar file exists
     - JSON is parseable
-    - Spot-checks up to max_spot_checks citations for file existence and line plausibility.
+    - Contains a non-empty ``citations`` array
+    - Spot-checks up to max_spot_checks citations for file existence and
+      line plausibility.
     """
     import json
     import re
 
     errors: List[str] = []
-    text = md_path.read_text(encoding="utf-8")
 
-    # Look for ## Citations + ```json block
-    pattern = re.compile(
-        r"^## Citations\b.*?```json\s*\n(.*?)\n\s*```",
-        re.MULTILINE | re.DOTALL,
-    )
-    match = pattern.search(text)
-    if not match:
+    if not sidecar_path.exists():
         errors.append(
-            f"[{component_name}] Missing ## Citations section with JSON block"
+            f"[{component_name}] Missing sidecar file: {sidecar_path.name}"
         )
         return errors
 
-    json_text = match.group(1).strip()
-    if not json_text:
-        errors.append(f"[{component_name}] ## Citations JSON block is empty")
-        return errors
-
     try:
-        data = json.loads(json_text)
+        payload = json.loads(sidecar_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        errors.append(f"[{component_name}] Invalid JSON in ## Citations: {exc}")
+        errors.append(
+            f"[{component_name}] Invalid JSON in {sidecar_path.name}: {exc}"
+        )
         return errors
 
+    if not isinstance(payload, dict):
+        errors.append(
+            f"[{component_name}] {sidecar_path.name} must be a JSON object, "
+            f"got {type(payload).__name__}"
+        )
+        return errors
+
+    data = payload.get("citations", [])
     if not isinstance(data, list):
         errors.append(
-            f"[{component_name}] ## Citations must be a JSON array, got {type(data).__name__}"
+            f"[{component_name}] 'citations' must be a JSON array, "
+            f"got {type(data).__name__}"
         )
         return errors
 
     if len(data) == 0:
-        errors.append(f"[{component_name}] ## Citations array is empty (expected 10+)")
+        errors.append(
+            f"[{component_name}] citations array is empty (expected 10+)"
+        )
         return errors
 
     # Spot-check a sample of citations
