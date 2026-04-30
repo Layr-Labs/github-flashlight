@@ -1206,7 +1206,7 @@ NO_MORE_DEPTHS = expr("current_depth >= total_depths")
 
 
 @action(
-    reads=["service_name"],
+    reads=["service_name", "component_filter"],
     writes=[
         "components",
         "depth_order",
@@ -1228,10 +1228,13 @@ def read_discovery(state: State, __tracer: "TracerFactory") -> State:
     - /tmp/{service_name}/dependency_graphs/analysis_order.json
 
     Populates state with components and depth ordering for analysis.
+    If component_filter is set, only includes those components (plus
+    transitive deps) in the depth order.
     """
     from pathlib import Path
 
     service_name = state.get("service_name", "unknown")
+    component_filter = state.get("component_filter")
     work_dir = Path(f"/tmp/{service_name}")
     components_file = work_dir / "service_discovery" / "components.json"
     analysis_order_file = work_dir / "dependency_graphs" / "analysis_order.json"
@@ -1264,6 +1267,20 @@ def read_discovery(state: State, __tracer: "TracerFactory") -> State:
         t.log_attributes(
             depth_count=len(depth_order),
             total_components=sum(len(level) for level in depth_order),
+        )
+
+    # Apply component filter: prune depth_order to only include filtered components
+    if component_filter:
+        filtered_depth_order = []
+        for level in depth_order:
+            filtered_level = [name for name in level if name in component_filter]
+            if filtered_level:
+                filtered_depth_order.append(filtered_level)
+        depth_order = filtered_depth_order
+        logger.info(
+            "Component filter active: %d components across %d depth levels",
+            sum(len(l) for l in depth_order),
+            len(depth_order),
         )
 
     # Build component lookup by name
@@ -1717,6 +1734,7 @@ Documentation: /tmp/{service_name}/architecture_docs/architecture.md
 def build_analysis_pipeline(
     service_name: str,
     project_name: str = "flashlight-analysis",
+    component_filter: set[str] | None = None,
 ) -> Application:
     """Build the analysis pipeline for headless codebase analysis.
 
@@ -1732,6 +1750,8 @@ def build_analysis_pipeline(
     Args:
         service_name: Name of the service being analyzed (for /tmp/{service_name}/)
         project_name: Project name for Burr tracking UI
+        component_filter: If set, only these components will be analyzed.
+            The filter is passed to read_discovery which prunes the depth order.
 
     Returns:
         Compiled Burr Application
@@ -1769,6 +1789,7 @@ def build_analysis_pipeline(
             service_name=service_name,
             synthesis_result="",
             final_response="",
+            component_filter=component_filter,
         )
         .with_tracker(project=project_name)
         .build()
