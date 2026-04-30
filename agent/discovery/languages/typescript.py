@@ -107,6 +107,12 @@ class TypeScriptPlugin(LanguagePlugin):
         }
         scripts = data.get("scripts", {})
 
+        # Cloudflare Workers (wrangler.toml) are deployed services
+        if (component_root / "wrangler.toml").exists() or (
+            component_root / "wrangler.jsonc"
+        ).exists():
+            return ComponentKind.SERVICE
+
         # Has bin → CLI
         if data.get("bin"):
             return ComponentKind.CLI

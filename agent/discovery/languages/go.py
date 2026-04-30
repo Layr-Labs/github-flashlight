@@ -101,7 +101,9 @@ class GoPlugin(LanguagePlugin):
     ) -> Dict[str, Path]:
         """Find top-level directories that contain Go source files.
 
-        Returns a dict of {package_name: directory_path}.
+        Returns a dict of {package_name: directory_path}. A top-level `cmd/`
+        dir is treated as a container, not a package — its children are
+        handled by _build_package_components via the cmd/ recursion path.
         """
         packages: Dict[str, Path] = {}
 
@@ -110,6 +112,8 @@ class GoPlugin(LanguagePlugin):
                 continue
             if entry.name.startswith(".") or entry.name in SKIP_DIRS:
                 continue
+            if entry.name == "cmd" and self._cmd_is_binary_container(entry):
+                continue
 
             # Count .go files anywhere in this directory tree
             go_files = list(entry.rglob("*.go"))
@@ -117,6 +121,17 @@ class GoPlugin(LanguagePlugin):
                 packages[entry.name] = entry
 
         return packages
+
+    def _cmd_is_binary_container(self, cmd_dir: Path) -> bool:
+        """True if `cmd/` holds one-or-more `cmd/<name>/main.go` binaries
+        rather than a `cmd` Go package (cmd/*.go at the top level)."""
+        has_top_level_go = any(f.is_file() for f in cmd_dir.glob("*.go"))
+        if has_top_level_go:
+            return False
+        has_child_main = any(
+            sub.is_dir() and (sub / "main.go").exists() for sub in cmd_dir.iterdir()
+        )
+        return has_child_main
 
     def _build_package_components(
         self,
@@ -140,9 +155,22 @@ class GoPlugin(LanguagePlugin):
         for pkg_name, pkg_dir in packages.items():
             package_imports[pkg_name] = self._scan_imports(pkg_dir, module_path)
 
-        # Scan all cmd/ directories recursively within each package.
-        # Handles: pkg/cmd/foo, pkg/sub/cmd/bar, etc.
+        # Scan all cmd/ directories recursively within each package AND
+        # at the repo root. Handles: cmd/foo, pkg/cmd/foo, pkg/sub/cmd/bar.
         cmd_components: List[Tuple[str, str, Path, ComponentKind]] = []
+
+        root_cmd = component_root / "cmd"
+        if root_cmd.is_dir():
+            for cmd_entry in sorted(root_cmd.iterdir()):
+                if cmd_entry.is_dir() and self._has_main_go(cmd_entry):
+                    cmd_name = cmd_entry.name
+                    if cmd_name in package_imports:
+                        continue
+                    cmd_imports = self._scan_imports(cmd_entry, module_path)
+                    package_imports[cmd_name] = cmd_imports
+                    kind = self._classify_cmd(cmd_entry)
+                    cmd_components.append((cmd_name, "", cmd_entry, kind))
+
         for pkg_name, pkg_dir in packages.items():
             for cmd_dir in sorted(pkg_dir.rglob("cmd")):
                 if not cmd_dir.is_dir():
@@ -189,8 +217,8 @@ class GoPlugin(LanguagePlugin):
             internal_deps = self._resolve_import_deps(
                 package_imports[cmd_name], packages, module_path,
             )
-            # Always include the parent package as a dep
-            if parent_pkg not in internal_deps:
+            # Root-level cmd binaries have no parent package
+            if parent_pkg and parent_pkg not in internal_deps:
                 internal_deps.add(parent_pkg)
 
             rel_path = str(cmd_dir.relative_to(repo_root))

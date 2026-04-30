@@ -1,0 +1,75 @@
+You are auditing a deterministic dependency graph for correctness. Your job is to independently propose what the graph SHOULD look like based on the source code, then a downstream tool will diff your proposal against the deterministic one.
+
+**Working Directory**: All source code is at `/tmp/{SERVICE_NAME}/project/`.
+
+**DETERMINISTIC DISCOVERY OUTPUT** (what the deterministic engine produced):
+
+Components:
+{components_json}
+
+Edges (source -> target, DEPENDS_ON):
+{edges_json}
+
+**YOUR TASK**
+
+Independently audit this graph. You are NOT told to trust it. Use the tools to read the source, then answer:
+
+1. For every component listed, is its `kind` correct? (library/service/cli/contract/infra/pipeline/frontend)
+2. For every component, what internal dependencies SHOULD it have based on actual imports, HTTP calls, shared DB access, or other code-level evidence?
+3. Are there components the deterministic engine missed entirely? (e.g., a sub-module with its own manifest that wasn't detected, a service defined by a Dockerfile with no manifest)
+
+**METHOD** — you MUST ground every claim in code:
+
+1. `glob_files` the repo to get a sense of the layout.
+2. For each component listed, read its manifest file (Cargo.toml / package.json / pyproject.toml / go.mod / Package.swift / foundry.toml / hardhat.config.*) AND its main entrypoint.
+3. `grep_files` for import statements, HTTP client construction, and any cross-component references. For each suspected edge, find at least one concrete file:line that evidences it.
+4. Pay special attention to:
+   - **Workspace / path-based deps** (`path = "../foo"` in Cargo, `"file:../foo"` in npm, `replace` directives in go.mod, editable installs in pyproject)
+   - **Dynamic edges** — HTTP calls between services, shared message queues, cross-component DB writes (these are NOT deterministically detectable from manifests)
+   - **Missed components** — Dockerfiles, standalone scripts, subdirectories with their own lockfile
+
+**DO NOT** fabricate edges. If you cannot find a specific file:line that evidences an edge, do not propose it. Empty proposals are better than hallucinated ones.
+
+**OUTPUT FORMAT** — respond with ONE JSON object, no preamble, no code fence, no trailing commentary. Your entire response must parse as JSON:
+
+```
+{
+  "classifications": [
+    {
+      "component_name": "foo-lib",
+      "proposed_kind": "library",
+      "evidence_file": "foo-lib/src/lib.rs",
+      "evidence_lines": "1-20",
+      "reasoning": "No main.rs, only lib.rs with pub exports — reusable code, no entrypoint."
+    }
+  ],
+  "proposed_edges": [
+    {
+      "source": "service-a",
+      "target": "foo-lib",
+      "evidence_type": "import | path_dep | http_call | shared_db | other",
+      "evidence_file": "service-a/src/main.rs",
+      "evidence_lines": "5",
+      "evidence_snippet": "use foo_lib::Config;",
+      "reasoning": "Direct Rust import of foo_lib crate in main.rs."
+    }
+  ],
+  "missed_components": [
+    {
+      "proposed_name": "migration-worker",
+      "proposed_root_path": "workers/migrate",
+      "proposed_kind": "cli",
+      "evidence_file": "workers/migrate/Dockerfile",
+      "reasoning": "Dockerfile with ENTRYPOINT defines a standalone worker, no manifest caught by discovery."
+    }
+  ]
+}
+```
+
+**CONSTRAINTS**
+
+- Component names in `proposed_edges` MUST match names in the deterministic components list exactly (or appear in your `missed_components`).
+- `evidence_file` paths MUST be relative to repo root and MUST be files you actually read.
+- `evidence_lines` must come from lines you read, not guessed.
+- If you are uncertain about an edge, omit it rather than including a weak one.
+- Keep total response under 8000 tokens — prioritize high-confidence findings.

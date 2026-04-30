@@ -150,3 +150,25 @@ class TestDependencyExtraction:
         assert "lodash" in dep_names
         # devDependencies should not be in external_dependencies
         assert "jest" not in dep_names
+
+
+class TestCloudflareWorker:
+    """Corpus finding: packages with wrangler.toml are deployed services."""
+
+    def test_wrangler_toml_sets_service_kind(self, plugin, repo):
+        repo.write_json("package.json", {
+            "name": "my-worker",
+            "scripts": {"deploy": "wrangler deploy", "dev": "wrangler dev"},
+        })
+        repo.write("wrangler.toml", 'name = "my-worker"\nmain = "src/index.ts"\n')
+        repo.write("src/index.ts", "export default {}")
+
+        comps = plugin.parse_manifest(repo.root / "package.json", repo.root)
+        assert comps[0].kind == ComponentKind.SERVICE
+
+    def test_wrangler_jsonc_also_detected(self, plugin, repo):
+        repo.write_json("package.json", {"name": "my-worker"})
+        repo.write("wrangler.jsonc", '{"name": "my-worker"}')
+
+        comps = plugin.parse_manifest(repo.root / "package.json", repo.root)
+        assert comps[0].kind == ComponentKind.SERVICE

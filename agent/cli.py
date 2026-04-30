@@ -308,6 +308,12 @@ def analyze(
     discovery_dir = work_dir / "service_discovery"
     graph_dir = work_dir / "dependency_graphs"
 
+    # Expose the repo at /tmp/{service_name}/project/ — every subagent prompt
+    # references this path as the source root, so without it analyzers can't
+    # read any code and end up hallucinating. Symlink (no disk copy) so large
+    # repos stay cheap and the view always tracks the current clone.
+    _setup_project_dir(repo, work_dir)
+
     # Discover components from source
     components = discover_components(repo, output_dir=discovery_dir)
     print(f"  Discovered {len(components)} components")
@@ -460,11 +466,32 @@ def analyze(
         project_root = tmp_artifacts / "project"
         cite_repo_root = project_root if project_root.exists() else None
 
+        # Build {component_name: root_path} map so the extractor can retry
+        # component-relative citation paths (e.g. when the LLM emits
+        # "base_model.py" for the models component, we want to fall back to
+        # "omlx/models/base_model.py"). Reads from the full unified graph
+        # since components.json may only list the repo-root entry for
+        # single-manifest Python packages.
+        component_roots: dict[str, str] = {}
+        graph_file = tmp_artifacts / "dependency_graphs" / "graph.json"
+        if graph_file.exists():
+            try:
+                with open(graph_file) as f:
+                    graph_data = json.load(f)
+                nodes = graph_data.get("nodes", {}).get("components", {})
+                for name, comp in nodes.items():
+                    root = comp.get("root_path", "")
+                    if root and root != ".":
+                        component_roots[name] = root
+            except (OSError, json.JSONDecodeError) as exc:
+                logger.warning("Could not load component roots from graph: %s", exc)
+
         cite_index = build_citations_index(
             analyses_dir=analyses_dir,
             repo_root=cite_repo_root,
             source_repo=cite_source_repo,
             source_commit=cite_source_commit,
+            component_roots=component_roots,
         )
 
         meta = cite_index.get("metadata", {})
@@ -505,6 +532,68 @@ def analyze(
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
+
+
+def _setup_project_dir(repo: Path, work_dir: Path) -> Path:
+    """Ensure `<work_dir>/project` points at the repo the subagents analyze.
+
+    Subagent prompts all reference `/tmp/{service_name}/project/` as the
+    source root. This function makes that path resolve to ``repo``.
+
+    Prefers a symlink (no disk copy, always consistent with the clone); falls
+    back to copying if the platform can't create the symlink.
+
+    Idempotent: safe to call across re-runs.
+
+    Args:
+        repo: Resolved path to the repository root (clone or local checkout)
+        work_dir: `/tmp/{service_name}` working directory
+
+    Returns:
+        Path to the project directory (``work_dir / "project"``)
+    """
+    project_dir = work_dir / "project"
+    repo = repo.resolve()
+    work_dir_resolved = work_dir.resolve()
+
+    # Refuse to alias a work_dir-rooted path onto itself (would create a cycle
+    # like /tmp/foo/project/project/project/...).
+    if repo == work_dir_resolved or work_dir_resolved in repo.parents:
+        raise ValueError(
+            f"Refusing to link {project_dir} -> {repo}: the repo lives inside "
+            f"the work_dir ({work_dir_resolved}). Move the clone outside "
+            f"{work_dir_resolved} or use a different service name."
+        )
+
+    # If project/ already points at the right target, keep it.
+    if project_dir.is_symlink():
+        try:
+            if project_dir.resolve() == repo:
+                return project_dir
+        except OSError:
+            pass
+        project_dir.unlink()
+    elif project_dir.exists():
+        # Stale real directory from an older run — remove so we can relink.
+        shutil.rmtree(project_dir)
+
+    try:
+        project_dir.symlink_to(repo, target_is_directory=True)
+        return project_dir
+    except OSError as exc:
+        logger.warning(
+            "Could not symlink %s → %s (%s); falling back to copy.",
+            project_dir,
+            repo,
+            exc,
+        )
+        shutil.copytree(
+            repo,
+            project_dir,
+            symlinks=True,
+            ignore=shutil.ignore_patterns(".git", "__pycache__", "node_modules"),
+        )
+        return project_dir
 
 
 def clone_repo(url: str, target_dir: Path) -> Path:
