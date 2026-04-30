@@ -8,9 +8,9 @@ Component Information:
 - Description: {component_description}
 - Direct Dependencies: {dependency_list}
 
-**Working Directory**: All source code is located at `/tmp/{SERVICE_NAME}/project/`
-- Use Glob, Grep, and Read tools to analyze code within this directory
-- The component_path is relative to `/tmp/{SERVICE_NAME}/project/`
+**Working Directory**: All source code is at `/tmp/{SERVICE_NAME}/project/`.
+- The component lives at `/tmp/{SERVICE_NAME}/project/{component_path}/`.
+- Use glob_files, grep_files, and read_file to explore it.
 
 **UPSTREAM CONTEXT** (analyses of direct dependencies):
 
@@ -18,6 +18,29 @@ Component Information:
 
 Use this context to understand how this component integrates with its dependencies.
 Focus on the interfaces and patterns documented above.
+
+**MANDATORY EXPLORATION BEFORE WRITING THE ANALYSIS**
+
+Do not skip this — shallow analyses are rejected. Work in this order:
+
+1. `glob_files` the component directory to list every source file (e.g.
+   `**/*.py`, `**/*.rs`, `**/*.go`, `**/*.ts` — match the component's type).
+2. `read_file` on the top-level entry point(s) (`__init__.py`, `lib.rs`,
+   `mod.rs`, `index.ts`, etc.) in full.
+3. `read_file` on every non-trivial source file in the component — at least
+   the first 300 lines each, more if the file is central. For components
+   with more than 10 files, read at least 6 key ones end-to-end.
+4. `grep_files` to find concrete call patterns, class definitions, trait
+   impls, route registrations, or CLI command wiring — whatever is relevant
+   to the component kind.
+5. `grep_files` for how this component's code uses symbols from each of its
+   Direct Dependencies. Follow at least one call site per dependency back
+   to the file that uses it.
+6. Read the manifest file (pyproject.toml, Cargo.toml, package.json,
+   go.mod) to get the exact dependency list with version constraints.
+
+Only after you have actually read the code should you write the analysis.
+Every claim must be grounded in something you read.
 
 **KIND-SPECIFIC ANALYSIS**
 
@@ -122,7 +145,7 @@ At the end of your Markdown analysis, include two JSON blocks:
 ```json
 [
   {
-    "file_path": "src/handler.rs",
+    "file_path": "{component_path}/handler.py",
     "start_line": 42,
     "end_line": 56,
     "claim": "The analysis claim this citation supports",
@@ -131,8 +154,24 @@ At the end of your Markdown analysis, include two JSON blocks:
 ]
 ```
 
-Aim for 10-30 citations linking your analysis claims to specific source code locations.
-Only cite line numbers you actually observed — never guess.
+**Citation rules — read carefully:**
+- `file_path` MUST be relative to the repository root and include the full
+  component path. For this component, paths MUST start with
+  `{component_path}/` (e.g. `{component_path}/handler.py`, NOT `handler.py`
+  and NOT `./handler.py`).
+- `start_line` and `end_line` MUST come from lines you actually read via
+  `read_file`. Never guess line numbers — if you didn't read it, don't
+  cite it.
+- Aim for 10-30 citations, at least one per major claim in the analysis.
+- Empty `[]` is better than fabricated citations.
 
-Save your analysis to:
-- /tmp/{SERVICE_NAME}/service_analyses/{component_name}.md
+**OUTPUT**
+
+Respond with the Markdown analysis as your message content. Do NOT call
+write_file — the orchestrator saves your response automatically. The
+analysis file will be written at
+`/tmp/{SERVICE_NAME}/service_analyses/{component_name}.md` using exactly
+what you return. Do not include any preamble ("Here is the analysis:"),
+do not wrap the whole thing in a code fence, do not add closing
+commentary. Start with the top-level `#` heading and end with the
+closing ``` of the `## Citations` block.

@@ -157,4 +157,103 @@ name = "my-crate"
         repo.write("src/main.rs", "fn main() {}\n")
 
         comps = plugin.parse_manifest(repo.root / "Cargo.toml", repo.root)
-        assert comps[0].kind == ComponentKind.LIBRARY  # hybrid defaults to library
+        assert comps[0].kind == ComponentKind.LIBRARY  # same-name bin → library
+
+
+class TestHybridAndExecutableClassification:
+    """Corpus findings: [[bin]] with distinct name indicates executable,
+    bare executables default to CLI not SERVICE."""
+
+    def test_hybrid_with_distinct_bin_name_is_executable(self, plugin, repo):
+        # tauri-cli pattern: lib + bin named cargo-tauri
+        repo.write("Cargo.toml", """
+[package]
+name = "tauri-cli"
+[lib]
+[[bin]]
+name = "cargo-tauri"
+path = "src/main.rs"
+
+[dependencies]
+clap = "4.0"
+""")
+        repo.write("src/lib.rs", "")
+        repo.write("src/main.rs", "fn main() {}\n")
+
+        comps = plugin.parse_manifest(repo.root / "Cargo.toml", repo.root)
+        assert comps[0].kind == ComponentKind.CLI
+
+    def test_bare_executable_defaults_to_cli(self, plugin, repo):
+        # Bare build-time binary with no framework hints — should be CLI
+        repo.write("Cargo.toml", """
+[package]
+name = "my-packer"
+""")
+        repo.write("src/main.rs", "fn main() {}\n")
+
+        comps = plugin.parse_manifest(repo.root / "Cargo.toml", repo.root)
+        assert comps[0].kind == ComponentKind.CLI
+
+
+class TestNonDefaultDependencyTables:
+    """Corpus findings: path-based deps in [dev-dependencies],
+    [build-dependencies], and [target.*.dependencies] must produce
+    internal edges."""
+
+    def test_dev_dependency_path_is_internal(self, plugin, repo):
+        repo.write("Cargo.toml", """
+[package]
+name = "my-app"
+
+[dev-dependencies]
+mock-service = { path = "../mock-service" }
+""")
+        repo.write("src/main.rs", "fn main() {}\n")
+
+        comps = plugin.parse_manifest(repo.root / "Cargo.toml", repo.root)
+        assert "mock-service" in comps[0].internal_dependencies
+
+    def test_build_dependency_path_is_internal(self, plugin, repo):
+        repo.write("Cargo.toml", """
+[package]
+name = "my-app"
+
+[build-dependencies]
+hbb_common = { path = "libs/hbb_common" }
+""")
+        repo.write("src/main.rs", "fn main() {}\n")
+
+        comps = plugin.parse_manifest(repo.root / "Cargo.toml", repo.root)
+        assert "hbb_common" in comps[0].internal_dependencies
+
+    def test_target_specific_dependency_path_is_internal(self, plugin, repo):
+        repo.write("Cargo.toml", """
+[package]
+name = "my-app"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+linux-shim = { path = "../linux-shim" }
+""")
+        repo.write("src/main.rs", "fn main() {}\n")
+
+        comps = plugin.parse_manifest(repo.root / "Cargo.toml", repo.root)
+        assert "linux-shim" in comps[0].internal_dependencies
+
+    def test_dev_dep_external_not_in_runtime_externals(self, plugin, repo):
+        # dev/build deps are test-time; they shouldn't leak into runtime externals
+        repo.write("Cargo.toml", """
+[package]
+name = "my-lib"
+
+[dependencies]
+serde = "1.0"
+
+[dev-dependencies]
+criterion = "0.5"
+""")
+        repo.write("src/lib.rs", "")
+
+        comps = plugin.parse_manifest(repo.root / "Cargo.toml", repo.root)
+        ext_names = {d.name for d in comps[0].external_dependencies}
+        assert "serde" in ext_names
+        assert "criterion" not in ext_names
