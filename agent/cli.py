@@ -369,6 +369,14 @@ def analyze(
     output = Path(output_dir).resolve()
     service_name = repo.name
 
+    # Guard against work_dir collision with repo path
+    # (e.g. repo at /tmp/d-inference → work_dir at /tmp/d-inference)
+    work_dir = Path(f"/tmp/{service_name}")
+    if work_dir.resolve() == repo or repo in work_dir.resolve().parents or work_dir.resolve() in repo.parents:
+        service_name = f"{repo.name}-flashlight"
+        work_dir = Path(f"/tmp/{service_name}")
+        logger.info("Adjusted service_name to %s to avoid work_dir collision", service_name)
+
     if not repo.exists():
         print(f"Error: repo path does not exist: {repo}", file=sys.stderr)
         sys.exit(1)
@@ -400,7 +408,6 @@ def analyze(
     # Phase 0: Deterministic discovery (zero LLM calls)
     # ---------------------------------------------------------------
     print("\nRunning deterministic discovery...")
-    work_dir = Path(f"/tmp/{service_name}")
     work_dir.mkdir(parents=True, exist_ok=True)
     discovery_dir = work_dir / "service_discovery"
     graph_dir = work_dir / "dependency_graphs"
