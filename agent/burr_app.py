@@ -1206,7 +1206,7 @@ NO_MORE_DEPTHS = expr("current_depth >= total_depths")
 
 
 @action(
-    reads=["service_name"],
+    reads=["service_name", "analysis_mode", "changed_components"],
     writes=[
         "components",
         "depth_order",
@@ -1227,11 +1227,15 @@ def read_discovery(state: State, __tracer: "TracerFactory") -> State:
     - /tmp/{service_name}/service_discovery/components.json
     - /tmp/{service_name}/dependency_graphs/analysis_order.json
 
-    Populates state with components and depth ordering for analysis.
+    In incremental mode, also pre-populates component_analyses from
+    existing artifacts for components that have NOT changed, so that
+    analyze_current_depth can skip re-running them.
     """
     from pathlib import Path
 
     service_name = state.get("service_name", "unknown")
+    analysis_mode = state.get("analysis_mode", "full")
+    changed_components = state.get("changed_components", [])
     work_dir = Path(f"/tmp/{service_name}")
     components_file = work_dir / "service_discovery" / "components.json"
     analysis_order_file = work_dir / "dependency_graphs" / "analysis_order.json"
@@ -1269,12 +1273,36 @@ def read_discovery(state: State, __tracer: "TracerFactory") -> State:
     # Build component lookup by name
     component_map = {c["name"]: c for c in components}
 
+    # Pre-populate analyses for unchanged components in incremental mode
+    # so analyze_current_depth can skip them while still having context
+    # for downstream dependencies.
+    preloaded_analyses: Dict[str, str] = {}
+    if analysis_mode == "incremental" and changed_components:
+        changed_set = set(changed_components)
+        analyses_dir = work_dir / "service_analyses"
+        if analyses_dir.exists():
+            for comp_name in component_map:
+                if comp_name not in changed_set:
+                    md_file = analyses_dir / f"{comp_name}.md"
+                    if md_file.exists():
+                        try:
+                            preloaded_analyses[comp_name] = md_file.read_text(
+                                encoding="utf-8"
+                            )
+                        except OSError:
+                            pass
+            if preloaded_analyses:
+                logger.info(
+                    "Pre-loaded %d unchanged component analyses for incremental run",
+                    len(preloaded_analyses),
+                )
+
     return state.update(
         components=component_map,
         depth_order=depth_order,
         current_depth=0,
         total_depths=len(depth_order),
-        component_analyses={},  # Will be populated as we analyze
+        component_analyses=preloaded_analyses,
     )
 
 
@@ -1285,6 +1313,8 @@ def read_discovery(state: State, __tracer: "TracerFactory") -> State:
         "current_depth",
         "component_analyses",
         "service_name",
+        "analysis_mode",
+        "changed_components",
     ],
     writes=["component_analyses", "current_depth"],
     tags=[
@@ -1300,6 +1330,11 @@ def analyze_current_depth(state: State, __tracer: "TracerFactory") -> State:
     1. Build upstream context from already-analyzed dependencies
     2. Run a component analyzer ReAct loop
     3. Store the analysis result
+
+    In incremental mode (analysis_mode == "incremental"), components that
+    are NOT in changed_components are skipped — their pre-loaded analyses
+    from read_discovery are kept as-is. Only changed components (and any
+    at depth 0 without pre-loaded analysis) get re-analyzed.
 
     Components at the same depth run concurrently on a ThreadPoolExecutor,
     bounded by FLASHLIGHT_MAX_PARALLEL (default 4). Threads are appropriate
@@ -1322,20 +1357,39 @@ def analyze_current_depth(state: State, __tracer: "TracerFactory") -> State:
     current_depth = state.get("current_depth", 0)
     analyses = dict(state.get("component_analyses", {}))
     service_name = state.get("service_name", "unknown")
+    analysis_mode = state.get("analysis_mode", "full")
+    changed_components = state.get("changed_components", [])
 
     if current_depth >= len(depth_order):
         # No more depths to analyze
         return state.update(current_depth=current_depth)
 
+    # In incremental mode, determine which components to skip.
+    # Unchanged components that already have a pre-loaded analysis are
+    # carried forward without re-running the LLM.
+    changed_set = set(changed_components) if analysis_mode == "incremental" else None
+
     # Resolve the work items for this depth up-front. Upstream context is
     # built from the already-complete `analyses` dict before any threads
     # start, so worker threads never read mutable orchestrator state.
     work_items: List[tuple[str, Dict[str, Any], str]] = []
+    skipped: List[str] = []
     for comp_name in depth_order[current_depth]:
         comp = components.get(comp_name)
         if not comp:
             logger.warning(f"Component not found in inventory: {comp_name}")
             continue
+
+        # Skip unchanged components in incremental mode (they already have
+        # pre-loaded analysis from read_discovery).
+        if (
+            changed_set is not None
+            and comp_name not in changed_set
+            and comp_name in analyses
+        ):
+            skipped.append(comp_name)
+            continue
+
         upstream_context = _build_upstream_context(
             comp.get("internal_dependencies", []), analyses
         )
@@ -1348,6 +1402,8 @@ def analyze_current_depth(state: State, __tracer: "TracerFactory") -> State:
         depth=current_depth,
         component_count=len(work_items),
         component_names=[name for name, _, _ in work_items],
+        skipped_components=skipped,
+        skipped_count=len(skipped),
         max_parallel=max_parallel,
         pool_size=pool_size,
     )
@@ -1738,9 +1794,22 @@ def build_analysis_pipeline(
     """
 
     # Simple input action for analysis mode
-    @action(reads=[], writes=["task"], tags=["phase:input"])
-    def receive_analysis_input(state: State, task: str) -> State:
-        return state.update(task=task)
+    @action(
+        reads=[],
+        writes=["task", "analysis_mode", "changed_components"],
+        tags=["phase:input"],
+    )
+    def receive_analysis_input(
+        state: State,
+        task: str,
+        analysis_mode: str = "full",
+        changed_components: list | None = None,
+    ) -> State:
+        return state.update(
+            task=task,
+            analysis_mode=analysis_mode,
+            changed_components=changed_components or [],
+        )
 
     app = (
         ApplicationBuilder()
@@ -1769,6 +1838,8 @@ def build_analysis_pipeline(
             service_name=service_name,
             synthesis_result="",
             final_response="",
+            analysis_mode="full",
+            changed_components=[],
         )
         .with_tracker(project=project_name)
         .build()
