@@ -65,7 +65,11 @@ def load_components(artifacts_dir: Path) -> list[dict]:
 
 
 def git_diff_files(repo_path: Path, last_sha: str, head_sha: str) -> list[str]:
-    """Get list of changed files between two commits."""
+    """Get list of changed files between two commits.
+
+    Tries ``git diff`` first. If that fails (e.g. shallow clone missing
+    last_sha), falls back to the GitHub Compare API.
+    """
     result = subprocess.run(
         ["git", "diff", "--name-only", f"{last_sha}..{head_sha}"],
         capture_output=True,
@@ -74,12 +78,69 @@ def git_diff_files(repo_path: Path, last_sha: str, head_sha: str) -> list[str]:
     )
     if result.returncode != 0:
         logger.warning(
-            "git diff failed (rc=%d): %s — falling back to full analysis",
+            "git diff failed (rc=%d): %s — trying GitHub Compare API",
             result.returncode,
             result.stderr.strip(),
         )
+        # Fallback: use GitHub Compare API if this is a GitHub repo
+        api_files = _github_diff_files(repo_path, last_sha, head_sha)
+        if api_files is not None:
+            return api_files
         return []
+
     return [f for f in result.stdout.strip().split("\n") if f]
+
+
+def _github_diff_files(
+    repo_path: Path, last_sha: str, head_sha: str
+) -> list[str] | None:
+    """Fetch changed files between two commits via the GitHub Compare API.
+
+    Returns None if the repo is not a GitHub repo or the API call fails.
+    """
+    # Try to extract owner/repo from the remote URL
+    try:
+        remote_result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            cwd=repo_path,
+        )
+        if remote_result.returncode != 0:
+            return None
+        remote_url = remote_result.stdout.strip()
+        # Handle both https://github.com/owner/repo.git and git@github.com:owner/repo.git
+        import re
+        match = re.search(r"github\.com[:/]([^/]+/[^/\s]+?)(?:\.git)?$", remote_url)
+        if not match:
+            return None
+        repo_slug = match.group(1)
+    except Exception:
+        return None
+
+    try:
+        gh_cmd = ["gh", "api", f"repos/{repo_slug}/compare/{last_sha}...{head_sha}",
+                  "--jq", ".files[].filename"]
+        # Use private token if available for private repos
+        private_token = os.environ.get("FLASHLIGHT_REPO_TOKEN", "")
+        if private_token:
+            gh_cmd = ["gh", "api",
+                      "-H", f"Authorization: token {private_token}",
+                      f"repos/{repo_slug}/compare/{last_sha}...{head_sha}",
+                      "--jq", ".files[].filename"]
+        api_result = subprocess.run(
+            gh_cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if api_result.returncode != 0:
+            logger.warning("GitHub Compare API failed: %s", api_result.stderr.strip())
+            return None
+        return [f for f in api_result.stdout.strip().split("\n") if f]
+    except Exception as exc:
+        logger.warning("GitHub Compare API error: %s", exc)
+        return None
 
 
 def map_files_to_components(
@@ -409,6 +470,30 @@ def analyze(
     )
     print()
 
+    # Prepare pipeline inputs
+    pipeline_inputs = {
+        "task": f"Analyze {service_name}",
+        "service_name": service_name,
+    }
+
+    # In incremental mode, copy existing service_analyses into the work dir
+    # so that read_discovery can pre-load unchanged component analyses.
+    # This also ensures upstream context is available for changed components
+    # that depend on unchanged ones.
+    if diff_context["mode"] == "incremental" and output.exists():
+        existing_analyses = output / "service_analyses"
+        target_analyses = work_dir / "service_analyses"
+        if existing_analyses.exists() and not target_analyses.exists():
+            shutil.copytree(existing_analyses, target_analyses)
+            print(f"  Pre-copied existing analyses to {target_analyses}")
+        pipeline_inputs["analysis_mode"] = "incremental"
+        pipeline_inputs["changed_components"] = sorted(
+            diff_context.get("changed_components", [])
+        )
+        print(
+            f"  Incremental: re-analyzing {len(pipeline_inputs['changed_components'])} changed component(s)"
+        )
+
     try:
         transcript.write_to_file(f"\nAnalyzing {service_name}...\n")
 
@@ -416,10 +501,7 @@ def analyze(
         # The pipeline: receive_input -> read_discovery -> analyze_current_depth (loop) -> synthesize -> respond
         action, result, state = app.run(
             halt_after=["respond"],
-            inputs={
-                "task": f"Analyze {service_name}",
-                "service_name": service_name,
-            },
+            inputs=pipeline_inputs,
         )
 
         # Get the response
@@ -516,9 +598,21 @@ def analyze(
         src = tmp_artifacts / dirname
         dst = output / dirname
         if src.exists():
-            if dst.exists():
-                shutil.rmtree(dst)
-            shutil.copytree(src, dst)
+            if dirname == "service_analyses" and diff_context["mode"] == "incremental" and dst.exists():
+                # Merge: copy individual files from src into dst, keeping
+                # unchanged analyses from the prior run intact.
+                for item in src.iterdir():
+                    target = dst / item.name
+                    if target.exists():
+                        target.unlink()
+                    if item.is_dir():
+                        shutil.copytree(item, target)
+                    else:
+                        shutil.copy2(item, target)
+            else:
+                if dst.exists():
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
 
     # Copy manifest.json
     manifest_src = tmp_artifacts / "manifest.json"
@@ -596,12 +690,15 @@ def _setup_project_dir(repo: Path, work_dir: Path) -> Path:
         return project_dir
 
 
-def clone_repo(url: str, target_dir: Path) -> Path:
+def clone_repo(url: str, target_dir: Path, last_sha: str = "") -> Path:
     """Clone a git repository to a target directory.
 
     Args:
         url: Git repository URL (https://github.com/org/repo)
         target_dir: Directory to clone into
+        last_sha: Previous commit SHA (for incremental). When provided,
+            the clone is deepened to include this commit so that
+            ``git diff last_sha..head_sha`` works.
 
     Returns:
         Path to the cloned repository
@@ -625,14 +722,30 @@ def clone_repo(url: str, target_dir: Path) -> Path:
             check=True,
             capture_output=True,
         )
+        # If we need a specific SHA for diffing, ensure it's available
+        if last_sha:
+            subprocess.run(
+                ["git", "fetch", "--depth", "100", "origin", last_sha],
+                cwd=repo_path,
+                capture_output=True,
+            )
     else:
         print(f"  Cloning {url} to {repo_path}...")
         target_dir.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            ["git", "clone", "--depth", "1", url, str(repo_path)],
-            check=True,
-            capture_output=True,
-        )
+        if last_sha:
+            # Clone with enough depth to include last_sha for diffing.
+            # Use --no-single-branch so we get the full tip history.
+            subprocess.run(
+                ["git", "clone", "--depth", "100", url, str(repo_path)],
+                check=True,
+                capture_output=True,
+            )
+        else:
+            subprocess.run(
+                ["git", "clone", "--depth", "1", url, str(repo_path)],
+                check=True,
+                capture_output=True,
+            )
 
     return repo_path
 
@@ -704,7 +817,7 @@ def main():
     ):
         print("Detected repository URL, cloning...")
         clone_dir = Path("/tmp/flashlight-repos")
-        repo_path = str(clone_repo(repo_path, clone_dir))
+        repo_path = str(clone_repo(repo_path, clone_dir, last_sha=args.last_sha))
 
     analyze(
         repo_path=repo_path,
